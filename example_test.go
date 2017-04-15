@@ -3,10 +3,8 @@ package iniconfig_test
 import (
 	"crypto/aes"
 	"fmt"
-	"io"
-	"os"
 
-	ini "github.com/pierrec/go-ini"
+	"github.com/kr/pretty"
 	"github.com/pierrec/go-iniconfig"
 )
 
@@ -19,21 +17,18 @@ func init() {
 	}
 }
 
-type Log struct {
-	FileSize iniconfig.BytesSize
-}
-
 type Config struct {
-	ConfigFile string `ini:"-"`
-	SaveConfig bool   `ini:"-"`
+	iniconfig.ConfigFile
 
 	Host     string
 	Port     int
 	Login    string
 	Password iniconfig.Password
-
-	Log
 }
+
+var _ iniconfig.Config = (*Config)(nil)
+
+var _ iniconfig.FromFlags = (*Config)(nil)
 
 func (c *Config) FlagUsageConfig(name string) string {
 	switch name {
@@ -51,51 +46,29 @@ func (c *Config) FlagUsageConfig(name string) string {
 	return ""
 }
 
-var _ iniconfig.FromIni = (*Config)(nil)
-
-func (c *Config) LoadConfig() (io.ReadCloser, error) {
-	if c.ConfigFile == "" {
-		return nil, nil
-	}
-	f, err := os.Open(c.ConfigFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return f, nil
-}
-
-func (c *Config) WriteConfig() (io.WriteCloser, error) {
-	if !c.SaveConfig {
-		return nil, nil
-	}
-	fname := c.ConfigFile
-	if fname == "" {
-		fname = "config.ini"
-	}
-	return os.Create(fname)
-}
-
 func Example() {
 	config := &Config{
-		ConfigFile: "config.ini",
-		SaveConfig: true,
+		ConfigFile: iniconfig.ConfigFile{"config.ini", true},
 		Host:       "localhost",
 		Port:       80,
 		Login:      "xxlogin",
 		Password:   "xxpwd",
-		Log:        Log{1 << 20},
 	}
 
-	err := iniconfig.Load(config, ini.Comment('#'))
+	err := iniconfig.Load(config)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	fmt.Printf(">> %#v\n", config)
+	pretty.Println(config)
 
 	// Output:
+	// 	&iniconfig_test.Config{
+	//     ConfigFile: iniconfig.ConfigFile{Name:"config.ini", Save:true},
+	//     Host:       "localhost",
+	//     Port:       80,
+	//     Login:      "xxlogin",
+	//     Password:   "xxpwd",
+	// }
 }

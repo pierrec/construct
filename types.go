@@ -12,7 +12,6 @@ import (
 
 	"github.com/cespare/xxhash"
 	humanize "github.com/dustin/go-humanize"
-	ini "github.com/pierrec/go-ini"
 )
 
 // ErrInvalidPassword is returned when extracting an encrypted password fails.
@@ -20,11 +19,15 @@ var ErrInvalidPassword = errors.New("invalid password")
 
 // PasswordBlock is the cipher block used by the Password type to encrypt/decrypt
 // a password.
+//
+// It must be set for the Password type to be functional.
 var PasswordBlock cipher.Block
 
 var hashSize = xxhash.New().Size()
 
 // Password implements encrypting and decrypting a password when serialized.
+//
+// PasswordBlock must be set for the Password type to be functional.
 type Password string
 
 var (
@@ -107,7 +110,7 @@ func (sz *BytesSize) UnmarshalText(text []byte) error {
 	if err == nil {
 		*sz = BytesSize(u)
 	}
-	return nil
+	return err
 }
 
 // ConfigFile can be embedded for automatically dealing with config files.
@@ -115,29 +118,38 @@ type ConfigFile struct {
 	// Name of the config file.
 	// If no name is specified, the file is not loaded by LoadConfig()
 	// and stdout is used if Save is true.
-	Name string
-	// Save the config file when the whole config is loaded.
-	Save bool
+	Name string `ini:"-"`
+	// Save the config file once the whole config has been loaded.
+	Save bool `ini:"-"`
 }
 
 var (
-	_ FromFlag = (*ConfigFile)(nil)
-	_ FromIni  = (*ConfigFile)(nil)
+	_ Config    = (*ConfigFile)(nil)
+	_ FromFlags = (*ConfigFile)(nil)
+	_ FromIni   = (*ConfigFile)(nil)
 )
 
-func (c *ConfigFile) UsageConfig() string {
-	return ""
-}
+// FlagsUsageConfig makes ConfigFile implement FromFlags.
+func (*ConfigFile) FlagsUsageConfig() []string { return nil }
 
-// FlagUsageConfig provides the command line flags usage.
-func (c *ConfigFile) FlagUsageConfig(name string) string {
+// InitConfig makes Log implement Config.
+func (*ConfigFile) InitConfig() error { return nil }
+
+// UsageConfig makes Log implement Config.
+func (c *ConfigFile) UsageConfig() []string { return nil }
+
+// OptionUsageConfig provides the command line flags usage.
+func (c *ConfigFile) OptionUsageConfig(name string) []string {
+	var s string
 	switch name {
 	case "configfile-name":
-		return "config file name (default=stdout)"
+		s = "config file name (default=stdout)"
 	case "configfile-save":
-		return "save config to file"
+		s = "save config to file"
+	default:
+		return nil
 	}
-	return ""
+	return []string{s}
 }
 
 // LoadConfig opens the config file for loading if the name is not empty.
@@ -157,12 +169,10 @@ func (c *ConfigFile) LoadConfig() (io.ReadCloser, error) {
 
 // WriteConfig opens the config file for saving if the save flag is active.
 // If the name is empty, the config file is written to stdout.
-func (c *ConfigFile) WriteConfig(ini *ini.INI) (io.WriteCloser, error) {
+func (c *ConfigFile) WriteConfig() (io.WriteCloser, error) {
 	if !c.Save {
 		return nil, nil
 	}
-	// Do not save its own values.
-	ini.Del("configfile", "")
 
 	if c.Name == "" {
 		return &nopCloser{os.Stdout}, nil

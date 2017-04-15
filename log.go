@@ -10,9 +10,9 @@ import (
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
-// Log provides the options for the logging facility.
+// ConfigLog provides the options for the logging facility.
 // The logger is based on CoLog (https://texlution.com/post/colog-prefix-based-logging-in-golang/).
-type Log struct {
+type ConfigLog struct {
 	Filename   string
 	Level      string
 	MaxSize    BytesSize
@@ -23,10 +23,13 @@ type Log struct {
 	log *colog.CoLog
 }
 
-var _ FromFlag = (*Log)(nil)
+var (
+	_ Config    = (*ConfigLog)(nil)
+	_ FromFlags = (*ConfigLog)(nil)
+)
 
-// LogDefault represents sensible values for a default Log.
-var LogDefault = Log{
+// ConfigLogDefault represents sensible values for a default ConfigLog.
+var ConfigLogDefault = ConfigLog{
 	Level:      "error",
 	MaxSize:    10 << 20, // 10 MB
 	MaxAge:     30,
@@ -34,8 +37,8 @@ var LogDefault = Log{
 	LocalTime:  true,
 }
 
-// Init must be called before using Log.
-func (lg *Log) Init() error {
+// InitConfig makes ConfigLog implement Config.
+func (lg *ConfigLog) InitConfig() error {
 	lvl, err := colog.ParseLevel(lg.Level)
 	if err != nil {
 		return err
@@ -66,26 +69,35 @@ func (lg *Log) Init() error {
 	return nil
 }
 
-// UsageConfig makes Log implement FromFlag.
-func (lg *Log) UsageConfig() string {
-	return ""
+// HasFlagsConfig makes ConfigLog implement FromFlags.
+func (*ConfigLog) FlagsUsageConfig() []string {
+	return nil
 }
 
-func (lg *Log) FlagUsageConfig(name string) string {
+// UsageConfig makes ConfigLog implement Config.
+func (lg *ConfigLog) UsageConfig() []string {
+	return nil
+}
+
+// OptionUsageConfig makes ConfigLog implement Config.
+func (lg *ConfigLog) OptionUsageConfig(name string) []string {
+	var s string
 	switch name {
 	case "log-filename":
-		return "file to write logs to (default=stderr)"
+		s = "file to write logs to (default=stderr)"
 	case "log-level":
 		levels := []colog.Level{colog.LTrace, colog.LDebug, colog.LInfo, colog.LWarning, colog.LError}
-		return fmt.Sprintf("logging level (one of %v)", levels)
+		s = fmt.Sprintf("logging level (one of %v)", levels)
 	case "log-maxsize":
-		return "maximum size in megabytes of the log file"
+		s = "maximum size in megabytes of the log file"
 	case "log-maxage":
-		return "maximum number of days to retain old log files"
+		s = "maximum number of days to retain old log files"
 	case "log-maxbackups":
-		return "maximum number of old log files to retain"
+		s = "maximum number of old log files to retain"
 	case "log-localtime":
-		return "do not use UTC time for formatting the timestamps in files"
+		s = "do not use UTC time for formatting the timestamps in files"
+	default:
+		return nil
 	}
-	return ""
+	return []string{s}
 }
