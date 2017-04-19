@@ -39,18 +39,18 @@ func iniSave(inic *ini.INI, ini FromIni) error {
 }
 
 func (c *config) iniAddComments(ini *ini.INI) {
-	ini.SetComments("", "", c.raw.UsageConfig()...)
+	ini.SetComments("", "", c.raw.UsageConfig(""))
 
 	for _, section := range append(ini.Sections(), "") {
 		if section != "" {
 			usage := c.usage(section)
-			ini.SetComments(section, "", usage...)
+			ini.SetComments(section, "", usage)
 		}
 
 		for _, key := range ini.Keys(section) {
 			name := toName(section, key)
 			usage := c.usage(name)
-			ini.SetComments(section, key, usage...)
+			ini.SetComments(section, key, usage)
 		}
 	}
 }

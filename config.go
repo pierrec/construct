@@ -23,8 +23,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
+
+	"github.com/pierrec/go-iniconfig/internal/structs"
 )
 
 const (
@@ -32,9 +33,13 @@ const (
 	// for command line flags.
 	OptionSeparator = "-"
 
-	// SliceSeparator is the rune used to separate slice items.
+	// SliceSeparator is used to separate slice items.
 	SliceSeparator = ','
 	sliceSeparator = string(SliceSeparator)
+
+	// MapKeySeparator is used to separate map keys and their value.
+	MapKeySeparator = ':'
+	mapKeySeparator = string(MapKeySeparator)
 )
 
 // Config defines the interface to set values from command line flags.
@@ -43,18 +48,15 @@ type Config interface {
 	// It is automatically invoked on Config and recursively on its embedded Config structs.
 	InitConfig() error
 
-	// UsageConfig returns the text to describe the Config.
-	UsageConfig() []string
-
-	// OptionUsageConfig provides the usage message for the given option.
-	// The name is in lowercase. It may contain an OptionSeparator if part of an embedded struct.
-	OptionUsageConfig(name string) []string
+	// UsageConfig provides the usage message for the given option name.
+	// If the name is the empty string, then the overall usage message is expected.
+	UsageConfig(name string) string
 }
 
 // FromFlags defines the interface to set values from command line flags.
 type FromFlags interface {
-	// FlagsUsageConfig returns the text used for each flag usage.
-	FlagsUsageConfig() []string
+	// SubConfig returns the Config for the subcommand to be processed.
+	SubConfig(subcommand string) (Config, error)
 }
 
 // FromEnv defines the interface to set values from environment variables.
@@ -84,17 +86,21 @@ type FromIni interface {
 //  - env value: provided by the FromEnv interface
 //  - cli value: provided by the FromFlags interface
 func Load(config Config) error {
+	return load(config, os.Args)
+}
+
+func load(config Config, args []string) error {
 	conf, err := newConfig(config)
 	if err != nil {
 		return err
 	}
-	return conf.Load()
+	return conf.Load(args)
 }
 
 type config struct {
 	raw Config
 	// reflect based representation of the struct to use as config.
-	root *structs
+	root *structs.StructStruct
 	// set of lowercased normalized names and the non lowercased ones.
 	// keys will be removed as they are set in order of highest priority first.
 	trans map[string]string
@@ -103,7 +109,7 @@ type config struct {
 }
 
 func newConfig(c Config) (*config, error) {
-	root, err := newStructs(c)
+	root, err := structs.NewStruct(c)
 	if err != nil {
 		return nil, err
 	}
@@ -115,11 +121,11 @@ func newConfig(c Config) (*config, error) {
 }
 
 // Build the mapping of lowercase names with their real names.
-func (c *config) buildKeys(fields []*structfield, section string) {
+func (c *config) buildKeys(fields []*structs.StructField, section string) {
 	for _, field := range fields {
-		name := toName(section, field.field.Name)
-		if field.embedded != nil {
-			c.buildKeys(field.embedded.data, name)
+		name := toName(section, field.Name())
+		if emb := field.Embedded(); emb != nil {
+			c.buildKeys(emb.Fields(), name)
 			continue
 		}
 		lname := strings.ToLower(name)
@@ -128,7 +134,7 @@ func (c *config) buildKeys(fields []*structfield, section string) {
 }
 
 // Load initializes the config.
-func (c *config) Load() error {
+func (c *config) Load(args []string) (err error) {
 	c.buildKeys(c.root.Fields(), "")
 
 	if cli, ok := c.raw.(FromFlags); ok {
@@ -137,27 +143,45 @@ func (c *config) Load() error {
 
 		c.fs.Usage = func() {
 			var out = os.Stderr
-			if usage := cli.FlagsUsageConfig(); len(usage) == 0 {
-				name := filepath.Base(os.Args[0])
-				fmt.Fprintf(out, "Usage of %s:\n", name)
-			} else {
-				fmt.Fprint(out, strings.Join(usage, "\n"), "\n")
-			}
+			usage := c.raw.UsageConfig("")
+			fmt.Fprintf(out, usage)
 			c.fs.SetOutput(out)
 			c.fs.PrintDefaults()
+			//TODO add subcommands help usages
+			//TODO parse for -h or -help, if detected then dont InitConfig()
 		}
 
 		if err := c.buildFlags("", c.root.Fields()); err != nil {
 			return err
 		}
 
-		if err := c.fs.Parse(os.Args[1:]); err != nil {
+		if err := c.fs.Parse(args[1:]); err != nil {
+			if err == flag.ErrHelp {
+				os.Exit(0)
+			}
 			return err
 		}
 
 		if err := c.updateFlags(); err != nil {
 			return err
 		}
+
+		// Process any subcommand.
+		defer func() {
+			if err != nil {
+				return
+			}
+			args := c.fs.Args()
+			if len(args) == 0 {
+				return
+			}
+			cfg, er := cli.SubConfig(args[0])
+			if err != nil || cfg == nil {
+				err = er
+				return
+			}
+			err = load(cfg, args)
+		}()
 	}
 
 	if env, ok := c.raw.(FromEnv); ok {
@@ -169,7 +193,7 @@ func (c *config) Load() error {
 				continue
 			}
 			names := c.fromNameAll(name)
-			field := c.root.Get(names...)
+			field := c.root.Lookup(names...)
 
 			if err := field.Set(v); err != nil {
 				return fmt.Errorf("env %s: %v", envvar, err)
@@ -205,7 +229,12 @@ func (c *config) Load() error {
 				if !inic.Has(section, key) {
 					continue
 				}
-				field := c.root.Get(section, key)
+				var field *structs.StructField
+				if section == "" {
+					field = c.root.Lookup(key)
+				} else {
+					field = c.root.Lookup(section, key)
+				}
 				v := inic.Get(section, key)
 
 				if err := field.Set(v); err != nil {
@@ -224,11 +253,13 @@ func (c *config) Load() error {
 
 // fromNameAll splits a concatenated name into all its names.
 func (c *config) fromNameAll(name string) []string {
+	name = strings.ToLower(name)
 	return strings.Split(c.trans[name], OptionSeparator)
 }
 
 // fromName split a concatenated name into its first name the rest.
 func (c *config) fromName(name string) (string, string) {
+	name = strings.ToLower(name)
 	lst := strings.SplitN(c.trans[name], OptionSeparator, 2)
 	if len(lst) == 2 {
 		return lst[0], lst[1]
@@ -238,34 +269,23 @@ func (c *config) fromName(name string) (string, string) {
 
 // usage returns the description of the given name.
 //
-// It returns the first non empty result from the OptionUsageConfig method.
-func (c *config) usage(name string) []string {
+// It returns the first non empty result from the UsageConfig method.
+func (c *config) usage(name string) string {
 	lname := strings.ToLower(name)
-	res, ok := c.root.CallFirst("OptionUsageConfig", []interface{}{lname}, callSliceStringMethod)
-	if !ok {
-		return nil
-	}
-	return res[0].([]string)
-}
-
-// in must be a slice of strings.
-func callSliceStringMethod(in []interface{}) bool {
-	if len(in) != 1 {
-		return false
-	}
-	res := in[0].([]string)
-	return len(res) > 0
+	return c.raw.UsageConfig(lname)
 }
 
 func (c *config) init() error {
-	res, ok := c.root.CallFirst("Init", nil, func(in []interface{}) bool {
-		err, ok := in[0].(error)
-		return ok && err != nil
-	})
+	res, ok := c.root.CallUntil("InitConfig", nil, callInitConfig)
 	if !ok {
 		return nil
 	}
 	return res[0].(error)
+}
+
+func callInitConfig(in []interface{}) bool {
+	err, ok := in[0].(error)
+	return ok && err != nil
 }
 
 // toName concatenates 2 names.

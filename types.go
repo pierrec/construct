@@ -129,27 +129,21 @@ var (
 	_ FromIni   = (*ConfigFile)(nil)
 )
 
-// FlagsUsageConfig makes ConfigFile implement FromFlags.
-func (*ConfigFile) FlagsUsageConfig() []string { return nil }
+// SubConfig makes ConfigFile implement FromFlags.
+func (*ConfigFile) SubConfig(string) (Config, error) { return nil, nil }
 
 // InitConfig makes Log implement Config.
 func (*ConfigFile) InitConfig() error { return nil }
 
-// UsageConfig makes Log implement Config.
-func (c *ConfigFile) UsageConfig() []string { return nil }
-
-// OptionUsageConfig provides the command line flags usage.
-func (c *ConfigFile) OptionUsageConfig(name string) []string {
-	var s string
+// UsageConfig provides the command line flags usage.
+func (c *ConfigFile) UsageConfig(name string) string {
 	switch name {
 	case "configfile-name":
-		s = "config file name (default=stdout)"
+		return "config file name (default=stdout)"
 	case "configfile-save":
-		s = "save config to file"
-	default:
-		return nil
+		return "save config to file"
 	}
-	return []string{s}
+	return ""
 }
 
 // LoadConfig opens the config file for loading if the name is not empty.

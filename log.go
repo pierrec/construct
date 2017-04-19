@@ -69,35 +69,25 @@ func (lg *ConfigLog) InitConfig() error {
 	return nil
 }
 
-// HasFlagsConfig makes ConfigLog implement FromFlags.
-func (*ConfigLog) FlagsUsageConfig() []string {
-	return nil
-}
+// SubConfig makes ConfigLog implement FromFlags.
+func (*ConfigLog) SubConfig(string) (Config, error) { return nil, nil }
 
 // UsageConfig makes ConfigLog implement Config.
-func (lg *ConfigLog) UsageConfig() []string {
-	return nil
-}
-
-// OptionUsageConfig makes ConfigLog implement Config.
-func (lg *ConfigLog) OptionUsageConfig(name string) []string {
-	var s string
+func (lg *ConfigLog) UsageConfig(name string) string {
 	switch name {
-	case "log-filename":
-		s = "file to write logs to (default=stderr)"
-	case "log-level":
+	case "configlog-filename":
+		return "file to write logs to (default=stderr)"
+	case "configlog-level":
 		levels := []colog.Level{colog.LTrace, colog.LDebug, colog.LInfo, colog.LWarning, colog.LError}
-		s = fmt.Sprintf("logging level (one of %v)", levels)
-	case "log-maxsize":
-		s = "maximum size in megabytes of the log file"
-	case "log-maxage":
-		s = "maximum number of days to retain old log files"
-	case "log-maxbackups":
-		s = "maximum number of old log files to retain"
-	case "log-localtime":
-		s = "do not use UTC time for formatting the timestamps in files"
-	default:
-		return nil
+		return fmt.Sprintf("logging level (one of %v)", levels)
+	case "configlog-maxsize":
+		return "maximum size in megabytes of the log file"
+	case "configlog-maxage":
+		return "maximum number of days to retain old log files"
+	case "configlog-maxbackups":
+		return "maximum number of old log files to retain"
+	case "configlog-localtime":
+		return "do not use UTC time for formatting the timestamps in files"
 	}
-	return []string{s}
+	return ""
 }
