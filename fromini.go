@@ -54,3 +54,15 @@ func (c *config) iniAddComments(ini *ini.INI) {
 		}
 	}
 }
+
+func (c *config) iniRemoveHidden(ini *ini.INI) {
+	for _, section := range append(ini.Sections(), "") {
+		for _, key := range ini.Keys(section) {
+			name := toName(section, key)
+			usage := c.usage(name)
+			if usage == "" {
+				ini.Del(section, key)
+			}
+		}
+	}
+}

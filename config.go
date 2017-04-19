@@ -29,6 +29,7 @@ import (
 )
 
 const (
+	configTagID = "cfg"
 	// OptionSeparator is used to separate an ini section name with a section key
 	// for command line flags.
 	OptionSeparator = "-"
@@ -42,7 +43,21 @@ const (
 	mapKeySeparator = string(MapKeySeparator)
 )
 
+// Help requested on the cli.
+var helpRequested bool
+
+func init() {
+	for _, s := range os.Args {
+		switch s {
+		case "-h", "-help", "--help":
+			helpRequested = true
+			break
+		}
+	}
+}
+
 // Config defines the interface to set values from command line flags.
+// Subcommands are defined by embedding Config structs.
 type Config interface {
 	// Init initializes the Config struct.
 	// It is automatically invoked on Config and recursively on its embedded Config structs.
@@ -50,13 +65,13 @@ type Config interface {
 
 	// UsageConfig provides the usage message for the given option name.
 	// If the name is the empty string, then the overall usage message is expected.
+	// If the returned message is empty, then the option is hidden.
 	UsageConfig(name string) string
 }
 
 // FromFlags defines the interface to set values from command line flags.
 type FromFlags interface {
-	// SubConfig returns the Config for the subcommand to be processed.
-	SubConfig(subcommand string) (Config, error)
+	FlagsConfig()
 }
 
 // FromEnv defines the interface to set values from environment variables.
@@ -105,11 +120,14 @@ type config struct {
 	// keys will be removed as they are set in order of highest priority first.
 	trans map[string]string
 
+	// Current subcommands.
+	subs []string
+
 	fs *flag.FlagSet
 }
 
 func newConfig(c Config) (*config, error) {
-	root, err := structs.NewStruct(c)
+	root, err := structs.NewStruct(c, configTagID)
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +136,14 @@ func newConfig(c Config) (*config, error) {
 		root:  root,
 		trans: make(map[string]string),
 	}, nil
+}
+
+func newConfigFromStruct(s *structs.StructStruct, c Config) *config {
+	return &config{
+		raw:   c,
+		root:  s,
+		trans: make(map[string]string),
+	}
 }
 
 // Build the mapping of lowercase names with their real names.
@@ -137,19 +163,9 @@ func (c *config) buildKeys(fields []*structs.StructField, section string) {
 func (c *config) Load(args []string) (err error) {
 	c.buildKeys(c.root.Fields(), "")
 
-	if cli, ok := c.raw.(FromFlags); ok {
+	if _, ok := c.raw.(FromFlags); ok {
 		// Update the config with the cli values.
 		c.fs = flag.NewFlagSet("", flag.ContinueOnError)
-
-		c.fs.Usage = func() {
-			var out = os.Stderr
-			usage := c.raw.UsageConfig("")
-			fmt.Fprintf(out, usage)
-			c.fs.SetOutput(out)
-			c.fs.PrintDefaults()
-			//TODO add subcommands help usages
-			//TODO parse for -h or -help, if detected then dont InitConfig()
-		}
 
 		if err := c.buildFlags("", c.root.Fields()); err != nil {
 			return err
@@ -175,12 +191,16 @@ func (c *config) Load(args []string) (err error) {
 			if len(args) == 0 {
 				return
 			}
-			cfg, er := cli.SubConfig(args[0])
-			if err != nil || cfg == nil {
-				err = er
-				return
+			// New subcommand.
+			sub := args[0]
+			c.subs = append(c.subs, sub)
+			if field := c.root.Lookup(c.subs...); field != nil {
+				if root, conf := getConfig(field); root != nil {
+					err = newConfigFromStruct(root, conf).Load(args)
+					return
+				}
 			}
-			err = load(cfg, args)
+			err = fmt.Errorf("unknown subcommand %s", sub)
 		}()
 	}
 
@@ -211,7 +231,7 @@ func (c *config) Load(args []string) (err error) {
 
 		if inic == nil {
 			// No ini file, create one.
-			inic, err := newIni()
+			inic, err = newIni()
 			if err != nil {
 				return err
 			}
@@ -219,9 +239,6 @@ func (c *config) Load(args []string) (err error) {
 				return err
 			}
 			c.iniAddComments(inic)
-			if err := iniSave(inic, cini); err != nil {
-				return err
-			}
 		} else {
 			// Load the ini file data.
 			for _, name := range c.trans {
@@ -241,10 +258,13 @@ func (c *config) Load(args []string) (err error) {
 					return err
 				}
 			}
+		}
 
-			if err := iniSave(inic, cini); err != nil {
-				return err
-			}
+		// Remove hidden options.
+		c.iniRemoveHidden(inic)
+
+		if err := iniSave(inic, cini); err != nil {
+			return err
 		}
 	}
 
@@ -276,7 +296,12 @@ func (c *config) usage(name string) string {
 }
 
 func (c *config) init() error {
-	res, ok := c.root.CallUntil("InitConfig", nil, callInitConfig)
+	// Skip init if help is requested.
+	if helpRequested {
+		return nil
+	}
+
+	res, ok := callUntil(c.root, "InitConfig", nil, callInitConfig)
 	if !ok {
 		return nil
 	}
@@ -295,4 +320,42 @@ func toName(section, key string) string {
 		name = fmt.Sprintf("%s%s%s", section, OptionSeparator, key)
 	}
 	return name
+}
+
+func callUntil(s *structs.StructStruct, m string, args []interface{}, until func([]interface{}) bool) ([]interface{}, bool) {
+	res, ok := s.Call(m, args)
+	if ok && until(res) {
+		return res, true
+	}
+	for _, field := range s.Fields() {
+		if isConfig(field) {
+			continue
+		}
+		emb := field.Embedded()
+		if emb == nil {
+			continue
+		}
+		res, ok := emb.CallUntil(m, args, until)
+		if ok && until(res) {
+			return res, true
+		}
+	}
+	return nil, false
+}
+
+func isConfig(field *structs.StructField) bool {
+	if field == nil {
+		return false
+	}
+	_, ok := field.PtrValue().(Config)
+	return ok
+}
+
+func getConfig(field *structs.StructField) (*structs.StructStruct, Config) {
+	if nc, ok := field.PtrValue().(Config); ok {
+		if emb := field.Embedded(); emb != nil {
+			return emb, nc
+		}
+	}
+	return nil, nil
 }

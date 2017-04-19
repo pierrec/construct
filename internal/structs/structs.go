@@ -44,9 +44,11 @@ var (
 
 // NewStruct recursively decomposes the input struct into its fields
 // and embedded structs.
+// Fields tags with "-" will be skipped.
+// Fields tags with a non empty value will be renamed to that value.
 //
 // The input must be a pointer to a struct.
-func NewStruct(s interface{}) (*StructStruct, error) {
+func NewStruct(s interface{}, tagid string) (*StructStruct, error) {
 	if s, ok := s.(*StructStruct); ok {
 		return s, nil
 	}
@@ -60,14 +62,16 @@ func NewStruct(s interface{}) (*StructStruct, error) {
 	}
 
 	return &StructStruct{
+		name:  fmt.Sprintf("%T", s),
 		raw:   s,
 		value: v,
-		data:  fieldsOf(s),
+		data:  fieldsOf(s, tagid),
 	}, nil
 }
 
 // StructField represents a struct field.
 type StructField struct {
+	name     string
 	field    *reflect.StructField
 	value    reflect.Value
 	tag      reflect.StructTag
@@ -76,7 +80,7 @@ type StructField struct {
 
 // Name returns the field name.
 func (f *StructField) Name() string {
-	return f.field.Name
+	return f.name
 }
 
 // Embedded returns the embedded struct if the field is embedded.
@@ -97,6 +101,11 @@ func (f *StructField) Value() interface{} {
 	return f.value.Interface()
 }
 
+// PtrValue returns the interface pointer value of the field.
+func (f *StructField) PtrValue() interface{} {
+	return f.value.Addr().Interface()
+}
+
 // Tag returns the tags defined on the field.
 func (f *StructField) Tag() reflect.StructTag {
 	return f.tag
@@ -104,6 +113,7 @@ func (f *StructField) Tag() reflect.StructTag {
 
 // StructStruct represents a decomposed struct.
 type StructStruct struct {
+	name  string
 	raw   interface{}
 	value reflect.Value
 	data  []*StructField
@@ -111,7 +121,7 @@ type StructStruct struct {
 
 // Name returns the underlying type name.
 func (s *StructStruct) Name() string {
-	return fmt.Sprintf("%T", s.raw)
+	return s.name
 }
 
 // GoString is used to debug a StructStruct and returns a full
@@ -159,19 +169,19 @@ func (s *StructStruct) string(n int) string {
 	return res
 }
 
-// Lookup returns the struct for the corresponding path.
+// Lookup returns the field for the corresponding path.
 func (s *StructStruct) Lookup(path ...string) *StructField {
 	name := path[0]
 	if len(path) == 1 {
 		for _, item := range s.data {
-			if item.embedded == nil && item.field.Name == name {
+			if item.Name() == name {
 				return item
 			}
 		}
 		return nil
 	}
 	for _, item := range s.data {
-		if item.embedded != nil && item.field.Name == name {
+		if item.embedded != nil && item.Name() == name {
 			return item.embedded.Lookup(path[1:]...)
 		}
 	}
@@ -183,8 +193,8 @@ func (s *StructStruct) Fields() []*StructField {
 	return s.data
 }
 
-// CallUntil recursively calls the given method on its StructStruct and stops
-// at the first one satisfying the stop condition.
+// CallUntil recursively calls the given method on its StructStruct fields
+// and stops at the first one satisfying the stop condition.
 func (s *StructStruct) CallUntil(m string, args []interface{}, until func([]interface{}) bool) ([]interface{}, bool) {
 	res, ok := s.Call(m, args)
 	if ok && until(res) {
@@ -229,7 +239,7 @@ func (s *StructStruct) Call(m string, args []interface{}) ([]interface{}, bool) 
 }
 
 // List the fields of the input which must be a pointer to a struct.
-func fieldsOf(v interface{}) (res []*StructField) {
+func fieldsOf(v interface{}, tagid string) (res []*StructField) {
 	value := reflect.ValueOf(v).Elem()
 	vType := value.Type()
 	for i, n := 0, value.NumField(); i < n; i++ {
@@ -239,10 +249,17 @@ func fieldsOf(v interface{}) (res []*StructField) {
 			continue
 		}
 		field := vType.Field(i)
+		fname := field.Name
 
 		tag := field.Tag
-		if tag := tag.Get("cfg"); tag == "-" {
+		tagval := tag.Get(tagid)
+		switch tagval {
+		case "":
+		case "-":
 			continue
+		default:
+			// Set the field name according to the struct tag.
+			fname = tagval
 		}
 
 		var fs *StructStruct
@@ -257,10 +274,10 @@ func fieldsOf(v interface{}) (res []*StructField) {
 			if field.Anonymous {
 				// Embedded field: recursively descend into its fields.
 				v := value.Addr().Interface()
-				fs = &StructStruct{v, value, fieldsOf(v)}
+				fs = &StructStruct{fname, v, value, fieldsOf(v, tagid)}
 			}
 		}
-		res = append(res, &StructField{&field, value, tag, fs})
+		res = append(res, &StructField{fname, &field, value, tag, fs})
 	}
 	return
 }

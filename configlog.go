@@ -37,6 +37,9 @@ var ConfigLogDefault = ConfigLog{
 	LocalTime:  true,
 }
 
+// FlagsConfig makes ConfigLog implement FromFlags.
+func (*ConfigLog) FlagsConfig() {}
+
 // InitConfig makes ConfigLog implement Config.
 func (lg *ConfigLog) InitConfig() error {
 	lvl, err := colog.ParseLevel(lg.Level)
