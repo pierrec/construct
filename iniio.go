@@ -1,11 +1,11 @@
-package iniconfig
+package construct
 
 import (
 	"fmt"
 	"io"
 
 	ini "github.com/pierrec/go-ini"
-	"github.com/pierrec/go-iniconfig/internal/structs"
+	"github.com/pierrec/construct/internal/structs"
 )
 
 // ConfigFileINI implements the FromIO interface for INI formatted files.

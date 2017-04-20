@@ -1,4 +1,4 @@
-package iniconfig
+package construct
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"time"
 
 	toml "github.com/pelletier/go-toml"
-	"github.com/pierrec/go-iniconfig/internal/structs"
+	"github.com/pierrec/construct/internal/structs"
 )
 
 // ConfigFileTOML implements the FromIO interface for TOML formatted files.

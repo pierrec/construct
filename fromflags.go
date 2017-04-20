@@ -1,4 +1,4 @@
-package iniconfig
+package construct
 
 import (
 	"flag"
@@ -8,7 +8,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/pierrec/go-iniconfig/internal/structs"
+	"github.com/pierrec/construct/internal/structs"
 )
 
 func (c *config) buildFlags(section string, root *structs.StructStruct) (err error) {

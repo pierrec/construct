@@ -1,10 +1,10 @@
-package iniconfig
+package construct
 
 import (
 	"fmt"
 	"io"
 
-	"github.com/pierrec/go-iniconfig/internal/structs"
+	"github.com/pierrec/construct/internal/structs"
 )
 
 // configIO defines the interface for retrieving options stored in

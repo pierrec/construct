@@ -1,34 +1,34 @@
-package iniconfig_test
+package construct_test
 
 import (
 	"crypto/aes"
 	"fmt"
 
 	"github.com/kr/pretty"
-	"github.com/pierrec/go-iniconfig"
+	"github.com/pierrec/construct"
 )
 
 func init() {
 	key := []byte("this is a private key for aes256")
 	var err error
-	iniconfig.PasswordBlock, err = aes.NewCipher(key)
+	construct.PasswordBlock, err = aes.NewCipher(key)
 	if err != nil {
 		panic(err)
 	}
 }
 
 type Config struct {
-	iniconfig.ConfigFile
+	construct.ConfigFile
 
 	Host     string
 	Port     int
 	Login    string
-	Password iniconfig.Password
+	Password construct.Password
 }
 
-var _ iniconfig.Config = (*Config)(nil)
+var _ construct.Config = (*Config)(nil)
 
-var _ iniconfig.FromFlags = (*Config)(nil)
+var _ construct.FromFlags = (*Config)(nil)
 
 func (c *Config) FlagUsageConfig(name string) string {
 	switch name {
@@ -48,14 +48,14 @@ func (c *Config) FlagUsageConfig(name string) string {
 
 func Example() {
 	config := &Config{
-		ConfigFile: iniconfig.ConfigFile{"config.ini", true},
+		ConfigFile: construct.ConfigFile{"config.ini", true},
 		Host:       "localhost",
 		Port:       80,
 		Login:      "xxlogin",
 		Password:   "xxpwd",
 	}
 
-	err := iniconfig.Load(config)
+	err := construct.Load(config)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -64,8 +64,8 @@ func Example() {
 	pretty.Println(config)
 
 	// Output:
-	// 	&iniconfig_test.Config{
-	//     ConfigFile: iniconfig.ConfigFile{Name:"config.ini", Save:true},
+	// 	&construct_test.Config{
+	//     ConfigFile: construct.ConfigFile{Name:"config.ini", Save:true},
 	//     Host:       "localhost",
 	//     Port:       80,
 	//     Login:      "xxlogin",

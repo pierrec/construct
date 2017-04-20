@@ -1,4 +1,4 @@
-package iniconfig
+package construct
 
 import (
 	"crypto/cipher"

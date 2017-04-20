@@ -1,4 +1,4 @@
-// Package iniconfig provides a simple way to load configuration into a struct
+// Package construct provides a simple way to load configuration into a struct
 // from various sources in order of priority, overriding its default values:
 //  - command line flags
 //  - environment variables
@@ -16,7 +16,7 @@
 //
 // Struct fields can be ignored with the tag cfg:"-"
 //
-package iniconfig
+package construct
 
 import (
 	"flag"
@@ -25,7 +25,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pierrec/go-iniconfig/internal/structs"
+	"github.com/pierrec/construct/internal/structs"
 )
 
 const (
