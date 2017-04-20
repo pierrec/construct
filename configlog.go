@@ -24,7 +24,6 @@ type ConfigLog struct {
 }
 
 var (
-	_ Config    = (*ConfigLog)(nil)
 	_ FromFlags = (*ConfigLog)(nil)
 )
 
@@ -38,7 +37,7 @@ var ConfigLogDefault = ConfigLog{
 }
 
 // FlagsConfig makes ConfigLog implement FromFlags.
-func (*ConfigLog) FlagsConfig() {}
+func (*ConfigLog) DoFlagsConfig() {}
 
 // InitConfig makes ConfigLog implement Config.
 func (lg *ConfigLog) InitConfig() error {
@@ -72,24 +71,21 @@ func (lg *ConfigLog) InitConfig() error {
 	return nil
 }
 
-// SubConfig makes ConfigLog implement FromFlags.
-func (*ConfigLog) SubConfig(string) (Config, error) { return nil, nil }
-
 // UsageConfig makes ConfigLog implement Config.
 func (lg *ConfigLog) UsageConfig(name string) string {
 	switch name {
-	case "configlog-filename":
+	case "Filename":
 		return "file to write logs to (default=stderr)"
-	case "configlog-level":
+	case "Level":
 		levels := []colog.Level{colog.LTrace, colog.LDebug, colog.LInfo, colog.LWarning, colog.LError}
 		return fmt.Sprintf("logging level (one of %v)", levels)
-	case "configlog-maxsize":
+	case "MaxSize":
 		return "maximum size in megabytes of the log file"
-	case "configlog-maxage":
+	case "MaxAge":
 		return "maximum number of days to retain old log files"
-	case "configlog-maxbackups":
+	case "MaxBackups":
 		return "maximum number of old log files to retain"
-	case "configlog-localtime":
+	case "LocalTime":
 		return "do not use UTC time for formatting the timestamps in files"
 	}
 	return ""

@@ -14,8 +14,8 @@ import (
 )
 
 // MarshalValue converts v into a higher level value or a string as follows:
-//  - int8, int16, int32 -> int64
-//  - uint8, uint16, uint32 -> uint64
+//  - int, int8, int16, int32 -> int64
+//  - uint, uint8, uint16, uint32 -> uint64
 //  - float32 -> float64
 //  - any slice/map/array -> string
 //  - time.Time, *text/template.Template, *html/template.Template, *regexp.RegExp, *url.URL -> string
@@ -33,16 +33,20 @@ func MarshalValue(v interface{}, seps ...rune) (interface{}, error) {
 	switch w := v.(type) {
 	case nil:
 		// May error further down.
-	case bool, time.Duration, float64, int, int64, string, uint, uint64:
+	case bool, time.Duration, float64, int64, string, uint64:
 		return w, nil
 	case float32:
 		return float64(w), nil
+	case int:
+		return int64(w), nil
 	case int8:
 		return int64(w), nil
 	case int16:
 		return int64(w), nil
 	case int32:
 		return int64(w), nil
+	case uint:
+		return uint64(w), nil
 	case uint8:
 		return uint64(w), nil
 	case uint16:
@@ -67,12 +71,12 @@ func MarshalValue(v interface{}, seps ...rune) (interface{}, error) {
 		if w == nil {
 			return "", nil
 		}
-		return fmt.Sprintf("%s", w.Tree.Root), nil
+		return w.Tree.Root.String(), nil
 	case *htemplate.Template:
 		if w == nil {
 			return "", nil
 		}
-		return fmt.Sprintf("%s", w.Tree.Root), nil
+		return w.Tree.Root.String(), nil
 	case *net.IPAddr:
 		if w == nil {
 			return "", nil

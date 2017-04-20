@@ -8,7 +8,7 @@
 // interfaces on the struct:
 //  - FromFlags interface for command line flags
 //  - FromEnv interface for environment variables
-//  - FromIni interface for ini file
+//  - FromIO interface for ini file
 //
 // Once the data is loaded from all sources, the Init() method is invoked
 // on the main struct as well as all the embedded ones that implement the
@@ -29,7 +29,8 @@ import (
 )
 
 const (
-	configTagID = "cfg"
+	TagID = "cfg"
+
 	// OptionSeparator is used to separate an ini section name with a section key
 	// for command line flags.
 	OptionSeparator = "-"
@@ -59,47 +60,49 @@ func init() {
 // Config defines the interface to set values from command line flags.
 // Subcommands are defined by embedding Config structs.
 type Config interface {
+	DoConfig()
+
 	// Init initializes the Config struct.
 	// It is automatically invoked on Config and recursively on its embedded Config structs.
 	InitConfig() error
 
 	// UsageConfig provides the usage message for the given option name.
 	// If the name is the empty string, then the overall usage message is expected.
-	// If the returned message is empty, then the option is hidden.
 	UsageConfig(name string) string
 }
 
 // FromFlags defines the interface to set values from command line flags.
 type FromFlags interface {
-	FlagsConfig()
+	DoFlagsConfig()
 }
 
 // FromEnv defines the interface to set values from environment variables.
 type FromEnv interface {
 	// EnvConfig returns the name of the environment variable used for
 	// the given option name.
-	// The name is in lowercase.
 	EnvConfig(name string) string
 }
 
-// FromIni defines the interface to set values from an ini source.
-type FromIni interface {
+// FromIO defines the interface to set values from an ini source.
+type FromIO interface {
 	// LoadConfig returns the source for the ini data.
 	LoadConfig() (io.ReadCloser, error)
 
 	// WriteConfig returns the destination for the ini data.
 	WriteConfig() (io.WriteCloser, error)
+
+	new() configIO
 }
 
 // Load populates the config with data from various sources.
 // config must be a pointer to a struct.
 //
 // The values are set based on the implemented interfaces by config
-// in the following order (last one wins):
-//  - default value: values initially set in config
-//  - ini value: provided by the FromIni interface
-//  - env value: provided by the FromEnv interface
+// in order of priority:
 //  - cli value: provided by the FromFlags interface
+//  - env value: provided by the FromEnv interface
+//  - ini value: provided by the FromIO interface
+//  - default value: values initially set in config
 func Load(config Config) error {
 	return load(config, os.Args)
 }
@@ -114,9 +117,10 @@ func load(config Config, args []string) error {
 
 type config struct {
 	raw Config
-	// reflect based representation of the struct to use as config.
+	// Internal reflect based representation of the struct to use as config.
 	root *structs.StructStruct
-	// set of lowercased normalized names and the non lowercased ones.
+	// Initially contains all the stringified keys of root.
+	// The map keys are the normalized names for flags and the value the untouched names.
 	// keys will be removed as they are set in order of highest priority first.
 	trans map[string]string
 
@@ -127,7 +131,7 @@ type config struct {
 }
 
 func newConfig(c Config) (*config, error) {
-	root, err := structs.NewStruct(c, configTagID)
+	root, err := structs.NewStruct(c, TagID)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +150,7 @@ func newConfigFromStruct(s *structs.StructStruct, c Config) *config {
 	}
 }
 
-// Build the mapping of lowercase names with their real names.
+// Build the mapping of flags normalized names with their real names.
 func (c *config) buildKeys(fields []*structs.StructField, section string) {
 	for _, field := range fields {
 		name := toName(section, field.Name())
@@ -167,7 +171,7 @@ func (c *config) Load(args []string) (err error) {
 		// Update the config with the cli values.
 		c.fs = flag.NewFlagSet("", flag.ContinueOnError)
 
-		if err := c.buildFlags("", c.root.Fields()); err != nil {
+		if err := c.buildFlags("", c.root); err != nil {
 			return err
 		}
 
@@ -204,10 +208,10 @@ func (c *config) Load(args []string) (err error) {
 		}()
 	}
 
-	if env, ok := c.raw.(FromEnv); ok {
+	if from, ok := c.raw.(FromEnv); ok {
 		// Update the config with the env values.
 		for _, name := range c.trans {
-			envvar := env.EnvConfig(name)
+			envvar := from.EnvConfig(name)
 			v, ok := os.LookupEnv(envvar)
 			if !ok {
 				continue
@@ -222,37 +226,27 @@ func (c *config) Load(args []string) (err error) {
 		}
 	}
 
-	if cini, ok := c.raw.(FromIni); ok {
+	if from, ok := c.raw.(FromIO); ok {
 		// Load the values from the ini source.
-		inic, err := iniLoad(cini)
+		cio, err := ioLoad(from)
 		if err != nil {
 			return err
 		}
 
-		if inic == nil {
-			// No ini file, create one.
-			inic, err = newIni()
-			if err != nil {
-				return err
-			}
-			if err := inic.Encode(c.raw); err != nil {
-				return err
-			}
-			c.iniAddComments(inic)
-		} else {
-			// Load the ini file data.
+		if cio != nil {
+			// Merge the file data with the current options.
 			for _, name := range c.trans {
-				section, key := c.fromName(name)
-				if !inic.Has(section, key) {
+				keys := c.fromNameAll(name)
+				field := c.root.Lookup(keys...)
+				if !cio.Has(keys...) {
+					// v := field.Value()
+					//TODO cio.Set(v, keys...)
 					continue
 				}
-				var field *structs.StructField
-				if section == "" {
-					field = c.root.Lookup(key)
-				} else {
-					field = c.root.Lookup(section, key)
+				v, err := cio.Get(keys...)
+				if err != nil {
+					return fmt.Errorf("%s: %v", name, err)
 				}
-				v := inic.Get(section, key)
 
 				if err := field.Set(v); err != nil {
 					return err
@@ -260,10 +254,7 @@ func (c *config) Load(args []string) (err error) {
 			}
 		}
 
-		// Remove hidden options.
-		c.iniRemoveHidden(inic)
-
-		if err := iniSave(inic, cini); err != nil {
+		if err := c.ioSave(cio, from); err != nil {
 			return err
 		}
 	}
@@ -277,22 +268,20 @@ func (c *config) fromNameAll(name string) []string {
 	return strings.Split(c.trans[name], OptionSeparator)
 }
 
-// fromName split a concatenated name into its first name the rest.
-func (c *config) fromName(name string) (string, string) {
-	name = strings.ToLower(name)
-	lst := strings.SplitN(c.trans[name], OptionSeparator, 2)
-	if len(lst) == 2 {
-		return lst[0], lst[1]
-	}
-	return "", lst[0]
-}
-
 // usage returns the description of the given name.
 //
 // It returns the first non empty result from the UsageConfig method.
 func (c *config) usage(name string) string {
-	lname := strings.ToLower(name)
-	return c.raw.UsageConfig(lname)
+	res, ok := callUntil(c.root, "UsageConfig", []interface{}{name}, callUsageConfig)
+	if !ok {
+		return ""
+	}
+	return res[0].(string)
+}
+
+func callUsageConfig(in []interface{}) bool {
+	s := in[0].(string)
+	return s != ""
 }
 
 func (c *config) init() error {
@@ -314,14 +303,15 @@ func callInitConfig(in []interface{}) bool {
 }
 
 // toName concatenates 2 names.
-func toName(section, key string) string {
-	name := key
-	if section != "" {
-		name = fmt.Sprintf("%s%s%s", section, OptionSeparator, key)
+func toName(a, b string) string {
+	if a == "" {
+		return b
 	}
-	return name
+	return a + OptionSeparator + b
 }
 
+// callUntil recursively calls the given method m with arguments args
+// on the StructStructs until the until function returns true.
 func callUntil(s *structs.StructStruct, m string, args []interface{}, until func([]interface{}) bool) ([]interface{}, bool) {
 	res, ok := s.Call(m, args)
 	if ok && until(res) {
@@ -348,7 +338,7 @@ func isConfig(field *structs.StructField) bool {
 		return false
 	}
 	_, ok := field.PtrValue().(Config)
-	return ok
+	return ok && field.Embedded() != nil
 }
 
 func getConfig(field *structs.StructField) (*structs.StructStruct, Config) {

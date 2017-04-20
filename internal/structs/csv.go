@@ -3,7 +3,6 @@ package structs
 import (
 	"bytes"
 	"encoding/csv"
-	"log"
 	"strings"
 )
 
@@ -33,7 +32,6 @@ type csvreadwriter struct {
 
 // read converts the csv input string into a slice.
 func (r *csvreadwriter) read(s string) ([]string, error) {
-	log.Println("debug: csv:", s)
 	if s == "" {
 		return nil, nil
 	}

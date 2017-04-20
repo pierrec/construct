@@ -11,10 +11,10 @@ import (
 	"github.com/pierrec/go-iniconfig/internal/structs"
 )
 
-func (c *config) buildFlags(section string, fields []*structs.StructField) (err error) {
+func (c *config) buildFlags(section string, root *structs.StructStruct) (err error) {
 	var subcommands []*structs.StructField
 
-	for _, field := range fields {
+	for _, field := range root.Fields() {
 		// Skip subcommand.
 		if isConfig(field) {
 			subcommands = append(subcommands, field)
@@ -23,14 +23,14 @@ func (c *config) buildFlags(section string, fields []*structs.StructField) (err 
 
 		name := toName(section, field.Name())
 		if emb := field.Embedded(); emb != nil {
-			err := c.buildFlags(name, emb.Fields())
+			err := c.buildFlags(name, emb)
 			if err != nil {
 				return err
 			}
 			continue
 		}
 		lname := strings.ToLower(name)
-		usage := c.usage(name)
+		usage := c.usage(field.Name())
 
 		v := field.Value()
 
