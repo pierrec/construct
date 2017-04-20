@@ -121,7 +121,7 @@ func (c *config) updateFlags() (err error) {
 		if err != nil {
 			return
 		}
-		names := c.fromNameAll(f.Name)
+		names := c.fromNameAll(f.Name, OptionSeparator)
 		field := c.root.Lookup(names...)
 
 		v := f.Value.(flag.Getter).Get()

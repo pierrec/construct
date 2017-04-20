@@ -31,8 +31,7 @@ import (
 const (
 	TagID = "cfg"
 
-	// OptionSeparator is used to separate an ini section name with a section key
-	// for command line flags.
+	// OptionSeparator is used to separate grouped options in command line flags.
 	OptionSeparator = "-"
 
 	// SliceSeparator is used to separate slice items.
@@ -42,6 +41,13 @@ const (
 	// MapKeySeparator is used to separate map keys and their value.
 	MapKeySeparator = ':'
 	mapKeySeparator = string(MapKeySeparator)
+)
+
+var (
+	// EnvSeparator is used to separate grouped options in environment variables.
+	EnvSeparator = "_"
+	// EnvPrefix is used to as a prefix for environment variables.
+	EnvPrefix = ""
 )
 
 // Help requested on the cli.
@@ -213,10 +219,10 @@ func (c *config) Load(args []string) (err error) {
 		for _, name := range c.trans {
 			envvar := from.EnvConfig(name)
 			v, ok := os.LookupEnv(envvar)
-			if !ok {
+			if !ok || !strings.HasPrefix(v, EnvPrefix) {
 				continue
 			}
-			names := c.fromNameAll(name)
+			names := c.fromNameAll(name, EnvSeparator)
 			field := c.root.Lookup(names...)
 
 			if err := field.Set(v); err != nil {
@@ -236,7 +242,7 @@ func (c *config) Load(args []string) (err error) {
 		if cio != nil {
 			// Merge the file data with the current options.
 			for _, name := range c.trans {
-				keys := c.fromNameAll(name)
+				keys := c.fromNameAll(name, OptionSeparator)
 				field := c.root.Lookup(keys...)
 				if !cio.Has(keys...) {
 					// v := field.Value()
@@ -263,9 +269,9 @@ func (c *config) Load(args []string) (err error) {
 }
 
 // fromNameAll splits a concatenated name into all its names.
-func (c *config) fromNameAll(name string) []string {
+func (c *config) fromNameAll(name string, sep string) []string {
 	name = strings.ToLower(name)
-	return strings.Split(c.trans[name], OptionSeparator)
+	return strings.Split(c.trans[name], sep)
 }
 
 // usage returns the description of the given name.
