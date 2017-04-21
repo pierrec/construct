@@ -5,6 +5,9 @@ import (
 	"os"
 )
 
+// configFile is embedded into ConfigFile types to provide
+// common behaviour.
+// It does not implement the Config interface as it is not a subcommand.
 type configFile struct{}
 
 func (*configFile) DoFlagsConfig() {}

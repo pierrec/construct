@@ -29,9 +29,14 @@ import (
 )
 
 const (
+	// TagID is the struct tag name used to annotate struct fields.
+	// Struct fields with tag cfg:"-" are discarded.
+	// Embedded structs with tag cfg:"name" are renamed with the given name.
 	TagID = "cfg"
 
 	// OptionSeparator is used to separate grouped options in command line flags.
+	// Options are grouped using an embedded struct that does not implement the Config interface.
+	// Embedded structs that do implement the Config interface are command line subcommands.
 	OptionSeparator = "-"
 
 	// SliceSeparator is used to separate slice items.
