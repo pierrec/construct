@@ -15,7 +15,8 @@ type ConfigFileTOML struct {
 	// Name of the config file.
 	// If no name is specified, the file is not loaded by LoadConfig()
 	// and stdout is used if Save is true.
-	Name string `toml:"-"`
+	Name            string `toml:"-"`
+	BackupExtension string `toml:"-"`
 	// Save the config file once the whole config has been loaded.
 	Save bool `toml:"-"`
 
@@ -29,7 +30,9 @@ var (
 
 func (c *ConfigFileTOML) LoadConfig() (io.ReadCloser, error) { return c.loadConfig(c.Name, c.Save) }
 
-func (c *ConfigFileTOML) WriteConfig() (io.WriteCloser, error) { return c.writeConfig(c.Name, c.Save) }
+func (c *ConfigFileTOML) WriteConfig() (io.WriteCloser, error) {
+	return c.writeConfig(c.Name, c.BackupExtension, c.Save)
+}
 
 func (c *ConfigFileTOML) new() configIO {
 	v, _ := toml.Load("")
@@ -43,9 +46,7 @@ type tomlIO struct {
 	toml *toml.TomlTree
 }
 
-func (cio *tomlIO) Keys() []string {
-	return cio.toml.Keys()
-}
+func (cio *tomlIO) StructTag() string { return "toml" }
 
 func (cio *tomlIO) Has(keys ...string) bool {
 	return cio.toml.HasPath(keys)
@@ -97,10 +98,9 @@ func (cio *tomlIO) marshal(v interface{}) (interface{}, error) {
 		switch t := reflect.TypeOf(v); t.Kind() {
 		case reflect.Slice, reflect.Array:
 			value := reflect.ValueOf(v)
-			n := value.Len()
-			if n > 0 {
+			if n := value.Len(); n > 0 {
 				// Create of slice of items.
-				// First determine the type of the items by
+				// First find out the type of the items by
 				// marshaling the first one, then process the rest.
 				w, err := cio.marshal(value.Index(0).Interface())
 				if err != nil {

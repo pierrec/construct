@@ -10,7 +10,6 @@ import (
 // configIO defines the interface for retrieving options stored in
 // various data formats (ini, toml...).
 type configIO interface {
-	Keys() []string
 	Has(...string) bool
 	Get(...string) (interface{}, error)
 	Set(value interface{}, keys ...string) error
@@ -18,6 +17,8 @@ type configIO interface {
 
 	ReadFrom(io.Reader) (int64, error)
 	WriteTo(io.Writer) (int64, error)
+
+	StructTag() string
 }
 
 func ioLoad(from FromIO) (configIO, error) {
@@ -59,7 +60,14 @@ func (c *config) ioSave(cio configIO, from FromIO) error {
 
 // ioEncode encodes root into the configIO storage format.
 func ioEncode(cio configIO, keys []string, root *structs.StructStruct) error {
+	tag := cio.StructTag()
+
 	for _, field := range root.Fields() {
+		if field.Tag().Get(tag) == "-" {
+			// Skip discarded fields.
+			continue
+		}
+
 		ks := append(keys, field.Name())
 		if emb := field.Embedded(); emb != nil {
 			if err := ioEncode(cio, ks, emb); err != nil {
@@ -67,6 +75,7 @@ func ioEncode(cio configIO, keys []string, root *structs.StructStruct) error {
 			}
 			continue
 		}
+
 		v := field.Value()
 		if err := cio.Set(v, ks...); err != nil {
 			return fmt.Errorf("value %v: %v", v, err)
