@@ -54,8 +54,11 @@ func (cio *tomlIO) Has(keys ...string) bool {
 
 func (cio *tomlIO) Get(keys ...string) (interface{}, error) {
 	v := cio.toml.GetPath(keys)
-	switch v.(type) {
+	switch w := v.(type) {
 	case int64, float64, string, bool, time.Time:
+	case *toml.TomlTree:
+		m := w.ToMap()
+		return structs.MarshalValue(m)
 	default:
 		// Convert the value to make sure it can be Set properly.
 		return structs.MarshalValue(v)
@@ -73,7 +76,7 @@ func (cio *tomlIO) Get(keys ...string) (interface{}, error) {
 //  - time.Duration -> string
 //  - any map -> string
 //  - any slice -> slice of marshaled items
-func (cio *tomlIO) marshal(v interface{}) (interface{}, error) {
+func (cio *tomlIO) marshal(keys []string, v interface{}) (interface{}, error) {
 	switch w := v.(type) {
 	case int64, float64, string, bool, time.Time:
 	case int:
@@ -102,8 +105,8 @@ func (cio *tomlIO) marshal(v interface{}) (interface{}, error) {
 				// Create of slice of items.
 				// First find out the type of the items by
 				// marshaling the first one, then process the rest.
-				w, err := cio.marshal(value.Index(0).Interface())
-				if err != nil {
+				w, err := cio.marshal(keys, value.Index(0).Interface())
+				if err != nil || w == nil {
 					return nil, err
 				}
 
@@ -114,14 +117,18 @@ func (cio *tomlIO) marshal(v interface{}) (interface{}, error) {
 				lst.Index(0).Set(reflect.ValueOf(w))
 				for i := 1; i < n; i++ {
 					v := value.Index(i)
-					w, err := cio.marshal(v.Interface())
-					if err != nil {
+					w, err := cio.marshal(keys, v.Interface())
+					if err != nil || w == nil {
 						return nil, err
 					}
 					lst.Index(i).Set(reflect.ValueOf(w))
 				}
 				v = lst.Interface()
 			}
+
+		case reflect.Map:
+			err := cio.marshalMap(keys, v)
+			return nil, err
 
 		default:
 			mv, err := structs.MarshalValue(v)
@@ -134,9 +141,42 @@ func (cio *tomlIO) marshal(v interface{}) (interface{}, error) {
 	return v, nil
 }
 
+// marshalMap makes use of TOML tables by setting them with the map keys.
+// v must be a valid go map.
+func (cio *tomlIO) marshalMap(keys []string, v interface{}) error {
+	value := reflect.ValueOf(v)
+	n := value.Len()
+	if n == 0 {
+		// Empty map, just keep the key.
+		cio.toml.SetPath(keys, nil)
+		return nil
+	}
+	mkeys := value.MapKeys()
+	for i := 0; i < n; i++ {
+		key := mkeys[i]
+		mkey, err := cio.marshal(keys, key.Interface())
+		if err != nil {
+			return err
+		}
+		skey := fmt.Sprintf("%v", mkey)
+		nkeys := append(keys, skey)
+		if mkey == nil {
+			cio.toml.SetPath(nkeys, nil)
+			continue
+		}
+		el := value.MapIndex(key)
+		mel, err := cio.marshal(nkeys, el.Interface())
+		if err != nil {
+			return err
+		}
+		cio.toml.SetPath(nkeys, mel)
+	}
+	return nil
+}
+
 func (cio *tomlIO) Set(v interface{}, keys ...string) error {
-	v, err := cio.marshal(v)
-	if err != nil {
+	v, err := cio.marshal(keys, v)
+	if err != nil || v == nil {
 		return err
 	}
 	cio.toml.SetPath(keys, v)
