@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io"
 
-	ini "github.com/pierrec/go-ini"
 	"github.com/pierrec/construct/internal/structs"
+	ini "github.com/pierrec/go-ini"
 )
 
 // ConfigFileINI implements the FromIO interface for INI formatted files.
@@ -71,7 +71,7 @@ func (cio *iniIO) Has(keys ...string) bool {
 	return cio.INI.Has(cio.keys(keys))
 }
 
-func (cio *iniIO) Get(keys ...string) (string, error) {
+func (cio *iniIO) Get(keys ...string) (interface{}, error) {
 	return cio.INI.Get(cio.keys(keys)), nil
 }
 

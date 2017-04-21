@@ -12,7 +12,7 @@ import (
 type configIO interface {
 	Keys() []string
 	Has(...string) bool
-	Get(...string) (string, error)
+	Get(...string) (interface{}, error)
 	Set(value interface{}, keys ...string) error
 	//TODO SetComments(string, ...string)
 

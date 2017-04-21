@@ -7,7 +7,7 @@ import (
 
 // Set assigns v to the value.
 // If v is a string but value is not, then Set attempts to deserialize it
-// using encoding.Unmarshaler or in a best effort way.
+// using UnmarshalValue().
 func Set(value reflect.Value, v interface{}, seps ...rune) error {
 	if !value.CanSet() {
 		return errCannotSet

@@ -51,13 +51,15 @@ func (cio *tomlIO) Has(keys ...string) bool {
 	return cio.toml.HasPath(keys)
 }
 
-func (cio *tomlIO) Get(keys ...string) (string, error) {
-	item := cio.toml.GetPath(keys)
-	v, err := structs.MarshalValue(item)
-	if err != nil {
-		return "", err
+func (cio *tomlIO) Get(keys ...string) (interface{}, error) {
+	v := cio.toml.GetPath(keys)
+	switch v.(type) {
+	case int64, float64, string, bool, time.Time:
+	default:
+		// Convert the value to make sure it can be Set properly.
+		return structs.MarshalValue(v)
 	}
-	return fmt.Sprintf("%v", v), nil
+	return v, nil
 }
 
 // TOML supported types:
@@ -66,12 +68,13 @@ func (cio *tomlIO) Get(keys ...string) (string, error) {
 // Strategy for marshaling:
 //  - leave string, int64, bool, float64, time.Time unchanged
 //  - int, int8, int16, int32 -> int64
-//  - uint, uint8, uint16, uint32, time.Duration -> int64
+//  - uint, uint8, uint16, uint32 -> int64
+//  - time.Duration -> string
 //  - any map -> string
 //  - any slice -> slice of marshaled items
 func (cio *tomlIO) marshal(v interface{}) (interface{}, error) {
 	switch w := v.(type) {
-	case int64, string, bool, time.Time:
+	case int64, float64, string, bool, time.Time:
 	case int:
 		v = int64(w)
 	case int8:
@@ -79,8 +82,6 @@ func (cio *tomlIO) marshal(v interface{}) (interface{}, error) {
 	case int16:
 		v = int64(w)
 	case int32:
-		v = int64(w)
-	case time.Duration:
 		v = int64(w)
 	case uint:
 		v = int64(w)
@@ -94,7 +95,7 @@ func (cio *tomlIO) marshal(v interface{}) (interface{}, error) {
 		v = int64(w)
 	default:
 		switch t := reflect.TypeOf(v); t.Kind() {
-		case reflect.Slice:
+		case reflect.Slice, reflect.Array:
 			value := reflect.ValueOf(v)
 			n := value.Len()
 			if n > 0 {
