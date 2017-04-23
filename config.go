@@ -2,19 +2,18 @@
 // from various sources in order of priority, overriding its default values:
 //  - command line flags
 //  - environment variables
-//  - ini file
+//  - file in various formats
 //
-// The sources to load data from are determined by implementing the relevant
-// interfaces on the struct:
+// The data sources are defined by implementing the relevant interfaces on the struct:
 //  - FromFlags interface for command line flags
 //  - FromEnv interface for environment variables
-//  - FromIO interface for ini file
+//  - FromIO interface for files
 //
-// Once the data is loaded from all sources, the Init() method is invoked
-// on the main struct as well as all the embedded ones that implement the
-// Config interface.
+// Once the data is loaded from all sources, the InitConfig() method is invoked
+// on the main struct as well as all the embedded ones whether or not they implement
+// the Config interface.
 //
-// Struct fields can be ignored with the tag cfg:"-"
+// Struct fields can be ignored with the tag cfg:"-" and renamed with any other value.
 //
 package construct
 
@@ -56,6 +55,7 @@ var (
 )
 
 // Help requested on the cli.
+// If set to true, it will prevent the InitConfig methods from being triggered.
 var helpRequested bool
 
 func init() {
@@ -68,13 +68,18 @@ func init() {
 	}
 }
 
-// Config defines the interface to set values from command line flags.
-// Subcommands are defined by embedding Config structs.
+// Config defines the main interface for a config struct.
+// Any embedded struct is processed specifically depending if it implements Config or not:
+//  - if so, it defines a Subcommand, which is automatically loaded if hte subcommand is found in the flags
+//  - if not, it defines a group of config items with a prefix named aafter the type name
+//
+// The embedded type and field names can be overriden by a struct tag specifying the name to be used.
 type Config interface {
 	DoConfig()
 
 	// Init initializes the Config struct.
-	// It is automatically invoked on Config and recursively on its embedded Config structs.
+	// It is automatically invoked on Config and recursively on its embedded
+	// Config structs until an error is encountered.
 	InitConfig() error
 
 	// UsageConfig provides the usage message for the given option name.
@@ -94,7 +99,9 @@ type FromEnv interface {
 	EnvConfig(name string) string
 }
 
-// FromIO defines the interface to set values from an ini source.
+// FromIO defines the interface to set values from an io source (typically a file).
+// The supported formats are currently: ini and toml.
+//TODO add support for json, yaml.
 type FromIO interface {
 	// LoadConfig returns the source for the ini data.
 	LoadConfig() (io.ReadCloser, error)
@@ -295,9 +302,11 @@ func callUsageConfig(in []interface{}) bool {
 	return s != ""
 }
 
+// init invokes the InitConfig method recursively on the main type
+// and all the embedded ones. It stops at the first error encountered.
 func (c *config) init() error {
-	// Skip init if help is requested.
 	if helpRequested {
+		// Skip init if help is requested.
 		return nil
 	}
 
@@ -308,6 +317,7 @@ func (c *config) init() error {
 	return res[0].(error)
 }
 
+// callInitConfig detects an error returned by the InitConfig method.
 func callInitConfig(in []interface{}) bool {
 	err, ok := in[0].(error)
 	return ok && err != nil
@@ -344,6 +354,7 @@ func callUntil(s *structs.StructStruct, m string, args []interface{}, until func
 	return nil, false
 }
 
+// isConfig returns whether or not the field implements the Config interface.
 func isConfig(field *structs.StructField) bool {
 	if field == nil {
 		return false
@@ -352,6 +363,7 @@ func isConfig(field *structs.StructField) bool {
 	return ok && field.Embedded() != nil
 }
 
+// getConfig returns the struct implementing the Config interface, if any.
 func getConfig(field *structs.StructField) (*structs.StructStruct, Config) {
 	if nc, ok := field.PtrValue().(Config); ok {
 		if emb := field.Embedded(); emb != nil {
