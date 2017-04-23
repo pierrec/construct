@@ -253,13 +253,14 @@ func fieldsOf(v interface{}, tagid string) (res []*StructField) {
 
 		tag := field.Tag
 		tagval := tag.Get(tagid)
-		switch tagval {
+		// The name is the first item in a coma separated list.
+		switch v := strings.SplitN(tagval, ",", 2); v[0] {
 		case "":
 		case "-":
 			continue
 		default:
 			// Set the field name according to the struct tag.
-			fname = tagval
+			fname = v[0]
 		}
 
 		var fs *StructStruct
