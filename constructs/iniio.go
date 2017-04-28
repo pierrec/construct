@@ -1,9 +1,10 @@
-package construct
+package constructs
 
 import (
 	"fmt"
 	"io"
 
+	"github.com/pierrec/construct"
 	"github.com/pierrec/construct/internal/structs"
 	ini "github.com/pierrec/go-ini"
 )
@@ -22,8 +23,8 @@ type ConfigFileINI struct {
 }
 
 var (
-	_ FromFlags = (*ConfigFileINI)(nil)
-	_ FromIO    = (*ConfigFileINI)(nil)
+	_ construct.FromFlags = (*ConfigFileINI)(nil)
+	_ construct.FromIO    = (*ConfigFileINI)(nil)
 )
 
 func (c *ConfigFileINI) UsageConfig(name string) string {
@@ -36,14 +37,14 @@ func (c *ConfigFileINI) WriteConfig() (io.WriteCloser, error) {
 	return c.writeConfig(c.Name, c.Backup, c.Save)
 }
 
-func (c *ConfigFileINI) new() configIO {
+func (c *ConfigFileINI) New() construct.ConfigIO {
 	v, _ := ini.New(ini.Comment("# "))
 	return &iniIO{v}
 }
 
-var _ configIO = (*iniIO)(nil)
+var _ construct.ConfigIO = (*iniIO)(nil)
 
-// iniIO wraps an ini.INI instance to implement the configIO interface.
+// iniIO wraps an ini.INI instance to implement the construct.ConfigIO interface.
 type iniIO struct {
 	*ini.INI
 }

@@ -12,11 +12,11 @@ import (
 	"github.com/pierrec/construct/internal/structs"
 )
 
-func (c *config) initFlags() {
-	c.fs = flag.NewFlagSet("", flag.ContinueOnError)
-}
-
 func (c *config) buildFlags(section string, root *structs.StructStruct) error {
+	if c.fs == nil {
+		c.fs = flag.NewFlagSet("", flag.ContinueOnError)
+	}
+
 	for _, field := range root.Fields() {
 		if isConfig(field) {
 			// Skip subcommand.
@@ -73,8 +73,6 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 }
 
 func (c *config) buildFlagsUsage() func(io.Writer) error {
-	c.initFlags()
-
 	var subcommands []*structs.StructField
 
 	for _, field := range c.root.Fields() {

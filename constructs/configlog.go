@@ -1,4 +1,4 @@
-package construct
+package constructs
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"comail.io/go/colog"
+	"github.com/pierrec/construct"
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -24,7 +25,7 @@ type ConfigLog struct {
 }
 
 var (
-	_ FromFlags = (*ConfigLog)(nil)
+	_ construct.FromFlags = (*ConfigLog)(nil)
 )
 
 // ConfigLogDefault represents sensible values for a default ConfigLog.
@@ -36,9 +37,7 @@ var ConfigLogDefault = ConfigLog{
 	LocalTime:  true,
 }
 
-// FlagsConfig makes ConfigLog implement FromFlags.
-func (*ConfigLog) DoFlagsConfig() {}
-
+// FlagsUsageConfig makes ConfigLog implement FromFlags.
 func (*ConfigLog) FlagsUsageConfig() io.Writer { return nil }
 
 // InitConfig makes ConfigLog implement Config.

@@ -7,9 +7,9 @@ import (
 	"github.com/pierrec/construct/internal/structs"
 )
 
-// configIO defines the interface for retrieving options stored in
+// ConfigIO defines the interface for retrieving options stored in
 // various data formats (ini, toml...).
-type configIO interface {
+type ConfigIO interface {
 	Has(...string) bool
 	Get(...string) (interface{}, error)
 	Set(value interface{}, keys ...string) error
@@ -18,10 +18,11 @@ type configIO interface {
 	io.ReaderFrom
 	io.WriterTo
 
+	// StructTag returns the tag id used in struct field tags for the data format.
 	StructTag() string
 }
 
-func ioLoad(from FromIO) (configIO, error) {
+func ioLoad(from FromIO) (ConfigIO, error) {
 	if from == nil {
 		return nil, nil
 	}
@@ -34,21 +35,21 @@ func ioLoad(from FromIO) (configIO, error) {
 	}
 	defer src.Close()
 
-	cio := from.new()
+	cio := from.New()
 	if _, err := cio.ReadFrom(src); err != nil {
 		return nil, err
 	}
 	return cio, nil
 }
 
-func (c *config) ioSave(cio configIO, from FromIO) error {
+func (c *config) ioSave(cio ConfigIO, from FromIO) error {
 	dest, err := from.WriteConfig()
 	if err != nil || dest == nil {
 		return err
 	}
 	defer dest.Close()
 	if cio == nil {
-		cio = from.new()
+		cio = from.New()
 	}
 	if err := ioEncode(cio, nil, c.root); err != nil {
 		return err
@@ -58,8 +59,8 @@ func (c *config) ioSave(cio configIO, from FromIO) error {
 	return err
 }
 
-// ioEncode encodes root into the configIO storage format.
-func ioEncode(cio configIO, keys []string, root *structs.StructStruct) error {
+// ioEncode encodes root into the ConfigIO storage format.
+func ioEncode(cio ConfigIO, keys []string, root *structs.StructStruct) error {
 	tag := cio.StructTag()
 
 	for _, field := range root.Fields() {

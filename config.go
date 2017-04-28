@@ -50,8 +50,6 @@ const (
 var (
 	// EnvSeparator is used to separate grouped options in environment variables.
 	EnvSeparator = "_"
-	// EnvPrefix is used to as a prefix for environment variables.
-	EnvPrefix = ""
 )
 
 // Help requested on the cli.
@@ -92,15 +90,15 @@ type Config interface {
 
 // FromFlags defines the interface to set values from command line flags.
 type FromFlags interface {
-	DoFlagsConfig()
-
+	// FlagsUsageConfig returns the Writer for use when the usage is requested.
+	// If nil, it defaults to os.Stderr.
 	FlagsUsageConfig() io.Writer
 }
 
 // FromEnv defines the interface to set values from environment variables.
 type FromEnv interface {
-	// EnvConfig returns the name of the environment variable used for
-	// the given option name.
+	// EnvConfig returns the name of the environment variable used for the given option.
+	// Return an empty value to ignore the option.
 	EnvConfig(name string) string
 }
 
@@ -114,7 +112,7 @@ type FromIO interface {
 	// WriteConfig returns the destination for the ini data.
 	WriteConfig() (io.WriteCloser, error)
 
-	new() configIO
+	New() ConfigIO
 }
 
 // Load populates the config with data from various sources.
@@ -143,6 +141,20 @@ func LoadArgs(config Config, args []string) error {
 		return err
 	}
 	return conf.Load(args)
+}
+
+// Usage writes out the config usage to the given Writer.
+func Usage(config Config, out io.Writer) error {
+	conf, err := newConfig(config)
+	if err != nil {
+		return err
+	}
+	if err := conf.buildFlags("", conf.root); err != nil {
+		return err
+	}
+	usage := conf.buildFlagsUsage()
+
+	return usage(out)
 }
 
 type config struct {
@@ -199,8 +211,6 @@ func (c *config) Load(args []string) (err error) {
 
 	if _, ok := c.raw.(FromFlags); ok {
 		// Update the config with the cli values.
-		c.initFlags()
-
 		if err := c.buildFlags("", c.root); err != nil {
 			return err
 		}
@@ -242,8 +252,11 @@ func (c *config) Load(args []string) (err error) {
 		// Update the config with the env values.
 		for _, name := range c.trans {
 			envvar := from.EnvConfig(name)
+			if envvar == "" {
+				continue
+			}
 			v, ok := os.LookupEnv(envvar)
-			if !ok || !strings.HasPrefix(v, EnvPrefix) {
+			if !ok {
 				continue
 			}
 			names := c.fromNameAll(name, EnvSeparator)

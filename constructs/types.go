@@ -1,4 +1,4 @@
-package construct
+package constructs
 
 import (
 	"crypto/cipher"

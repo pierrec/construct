@@ -1,4 +1,4 @@
-package construct
+package constructs
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	toml "github.com/pelletier/go-toml"
+	"github.com/pierrec/construct"
 	"github.com/pierrec/construct/internal/structs"
 )
 
@@ -24,8 +25,8 @@ type ConfigFileTOML struct {
 }
 
 var (
-	_ FromFlags = (*ConfigFileTOML)(nil)
-	_ FromIO    = (*ConfigFileTOML)(nil)
+	_ construct.FromFlags = (*ConfigFileTOML)(nil)
+	_ construct.FromIO    = (*ConfigFileTOML)(nil)
 )
 
 func (c *ConfigFileTOML) UsageConfig(name string) string {
@@ -38,14 +39,14 @@ func (c *ConfigFileTOML) WriteConfig() (io.WriteCloser, error) {
 	return c.writeConfig(c.Name, c.Backup, c.Save)
 }
 
-func (c *ConfigFileTOML) new() configIO {
+func (c *ConfigFileTOML) New() construct.ConfigIO {
 	v, _ := toml.Load("")
 	return &tomlIO{v}
 }
 
-var _ configIO = (*tomlIO)(nil)
+var _ construct.ConfigIO = (*tomlIO)(nil)
 
-// tomlIO wraps an toml.Toml instance to implement the configIO interface.
+// tomlIO wraps an toml.Toml instance to implement the construct.ConfigIO interface.
 type tomlIO struct {
 	toml *toml.TomlTree
 }

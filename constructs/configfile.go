@@ -1,4 +1,4 @@
-package construct
+package constructs
 
 import (
 	"io"
@@ -9,8 +9,6 @@ import (
 // common behaviour.
 // It does not implement the Config interface as it is not a subcommand.
 type configFile struct{}
-
-func (*configFile) DoFlagsConfig() {}
 
 func (*configFile) FlagsUsageConfig() io.Writer { return nil }
 

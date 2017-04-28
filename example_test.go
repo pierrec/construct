@@ -3,27 +3,29 @@ package construct_test
 import (
 	"crypto/aes"
 	"fmt"
+	"os"
 
 	"github.com/kr/pretty"
 	"github.com/pierrec/construct"
+	"github.com/pierrec/construct/constructs"
 )
 
 func init() {
 	key := []byte("this is a private key for aes256")
 	var err error
-	construct.PasswordBlock, err = aes.NewCipher(key)
+	constructs.PasswordBlock, err = aes.NewCipher(key)
 	if err != nil {
 		panic(err)
 	}
 }
 
 type Server struct {
-	construct.ConfigFileINI
+	constructs.ConfigFileINI
 
 	Host     string
 	Port     int
 	Login    string
-	Password construct.Password
+	Password constructs.Password
 }
 
 var _ construct.Config = (*Server)(nil)
@@ -49,15 +51,19 @@ func (c *Server) UsageConfig(name string) string {
 
 func Example() {
 	Server := &Server{
-		ConfigFileINI: construct.ConfigFileINI{
-			Name:            "config.ini",
-			BackupExtension: ".bak",
-			Save:            true},
+		ConfigFileINI: constructs.ConfigFileINI{
+			Name:   "config.ini",
+			Backup: ".bak",
+			Save:   true},
 		Host:     "localhost",
 		Port:     80,
 		Login:    "xxlogin",
 		Password: "xxpwd",
 	}
+	defer func() {
+		os.Remove("config.ini")
+		os.Remove("config.bak")
+	}()
 
 	err := construct.Load(Server)
 	if err != nil {
@@ -69,11 +75,11 @@ func Example() {
 
 	// Output:
 	// 	&construct_test.Server{
-	//     ConfigFileINI: construct.ConfigFileINI{
-	//         Name:            "config.ini",
-	//         BackupExtension: ".bak",
-	//         Save:            true,
-	//         configFile:      construct.configFile{},
+	//     ConfigFileINI: constructs.ConfigFileINI{
+	//         Name:       "config.ini",
+	//         Backup:     ".bak",
+	//         Save:       true,
+	//         configFile: constructs.configFile{},
 	//     },
 	//     Host:     "localhost",
 	//     Port:     80,
