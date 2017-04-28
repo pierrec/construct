@@ -23,14 +23,15 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 			continue
 		}
 
-		name := toName(section, field.Name())
 		if emb := field.Embedded(); emb != nil {
-			err := c.buildFlags(name, emb)
+			section := toSection(section, emb)
+			err := c.buildFlags(section, emb)
 			if err != nil {
 				return err
 			}
 			continue
 		}
+		name := toName(section, field)
 		lname := strings.ToLower(name)
 		usage := c.usage(field.Name())
 

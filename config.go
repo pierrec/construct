@@ -1,5 +1,8 @@
 // Package construct provides a simple way to load configuration into a struct
-// from various sources in order of priority, overriding its default values:
+// strongly relying on embedded types and interfaces.
+//
+// Data can be fetched from various sources in order of priority, overriding the
+// struct instance (default) values:
 //  - command line flags
 //  - environment variables
 //  - file in various formats
@@ -7,13 +10,29 @@
 // The data sources are defined by implementing the relevant interfaces on the struct:
 //  - FromFlags interface for command line flags
 //  - FromEnv interface for environment variables
-//  - FromIO interface for files
+//  - FromIO interface for io sources
 //
 // Once the data is loaded from all sources, the InitConfig() method is invoked
 // on the main struct as well as all the embedded ones not implementing the Config interface.
 //
-// Struct fields can be ignored with the tag cfg:"-" and renamed with any other value
-// preceding the first coma.
+// The rules on the struct fields are as follow:
+//  - fields are only processed if they are exported
+//  - a field represents an option for the Config
+//  - an embedded type implementing the Config interface represents a subcommand
+//  - an embedded type not implementing the Config interface is used to group options
+//  - fields processing can be modified used field tags with the following format
+//
+//     `... cfg:"[<key>][,<flag1>[,<flag2>]]" ...`
+//
+// If the key is "-", the field is ignored.
+// If the key is not empty, the value is used as the field name.
+//
+// The following flags are currently supported:
+//
+//     inline       Inline the field which must be a struct, instead of
+//                  processing it as a group of options. Inlined fields must
+//                  not collide with the outer struct ones.
+//                  It has no effect on non embedded types.
 //
 package construct
 
@@ -193,21 +212,30 @@ func newConfigFromStruct(s *structs.StructStruct, c Config) *config {
 }
 
 // Build the mapping of flags normalized names with their real names.
-func (c *config) buildKeys(fields []*structs.StructField, section string) {
+func (c *config) buildKeys(fields []*structs.StructField, section string) error {
 	for _, field := range fields {
-		name := toName(section, field.Name())
 		if emb := field.Embedded(); emb != nil {
-			c.buildKeys(emb.Fields(), name)
+			section := toSection(section, emb)
+			if err := c.buildKeys(emb.Fields(), section); err != nil {
+				return fmt.Errorf("%s: %v", field.Name(), err)
+			}
 			continue
 		}
+		name := toName(section, field)
 		lname := strings.ToLower(name)
+		if _, ok := c.trans[lname]; ok {
+			return fmt.Errorf("duplicate option name: %s", lname)
+		}
 		c.trans[lname] = name
 	}
+	return nil
 }
 
 // Load initializes the config.
 func (c *config) Load(args []string) (err error) {
-	c.buildKeys(c.root.Fields(), "")
+	if err := c.buildKeys(c.root.Fields(), ""); err != nil {
+		return err
+	}
 
 	if _, ok := c.raw.(FromFlags); ok {
 		// Update the config with the cli values.
@@ -350,12 +378,25 @@ func callInitConfig(in []interface{}) bool {
 	return ok && err != nil
 }
 
-// toName concatenates 2 names.
-func toName(a, b string) string {
-	if a == "" {
-		return b
+// toName returns the field name.
+func toName(section string, f *structs.StructField) string {
+	name := f.Name()
+	if section == "" {
+		return name
 	}
-	return a + OptionSeparator + b
+	return section + OptionSeparator + name
+}
+
+// toSection returns the section name.
+func toSection(section string, s *structs.StructStruct) string {
+	if s.Inlined() {
+		return section
+	}
+	name := s.Name()
+	if section == "" {
+		return name
+	}
+	return section + OptionSeparator + name
 }
 
 // callUntil recursively calls the given method m with arguments args

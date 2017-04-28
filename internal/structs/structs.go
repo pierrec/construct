@@ -60,12 +60,16 @@ func NewStruct(s interface{}, tagid string) (*StructStruct, error) {
 	if v.Elem().Kind() != reflect.Struct {
 		return nil, errNoStruct
 	}
+	fields, err := fieldsOf(s, tagid)
+	if err != nil {
+		return nil, err
+	}
 
 	return &StructStruct{
 		name:  fmt.Sprintf("%T", s),
 		raw:   s,
 		value: v,
-		data:  fieldsOf(s, tagid),
+		data:  fields,
 	}, nil
 }
 
@@ -113,15 +117,21 @@ func (f *StructField) Tag() reflect.StructTag {
 
 // StructStruct represents a decomposed struct.
 type StructStruct struct {
-	name  string
-	raw   interface{}
-	value reflect.Value
-	data  []*StructField
+	name    string
+	raw     interface{}
+	inlined bool
+	value   reflect.Value
+	data    []*StructField
 }
 
 // Name returns the underlying type name.
 func (s *StructStruct) Name() string {
 	return s.name
+}
+
+// Inlined returns whether or not the struct is inlined.
+func (s *StructStruct) Inlined() bool {
+	return s.inlined
 }
 
 // GoString is used to debug a StructStruct and returns a full
@@ -239,7 +249,7 @@ func (s *StructStruct) Call(m string, args []interface{}) ([]interface{}, bool) 
 }
 
 // List the fields of the input which must be a pointer to a struct.
-func fieldsOf(v interface{}, tagid string) (res []*StructField) {
+func fieldsOf(v interface{}, tagid string) (res []*StructField, err error) {
 	value := reflect.ValueOf(v).Elem()
 	vType := value.Type()
 	for i, n := 0, value.NumField(); i < n; i++ {
@@ -253,14 +263,27 @@ func fieldsOf(v interface{}, tagid string) (res []*StructField) {
 
 		tag := field.Tag
 		tagval := tag.Get(tagid)
+		tagvalues := strings.Split(tagval, ",")
+
 		// The name is the first item in a coma separated list.
-		switch v := strings.SplitN(tagval, ",", 2); v[0] {
+		switch tagvalues[0] {
 		case "":
 		case "-":
 			continue
 		default:
 			// Set the field name according to the struct tag.
-			fname = v[0]
+			fname = tagvalues[0]
+		}
+
+		// Apply the tag flags.
+		var inline bool
+		for _, flag := range tagvalues[1:] {
+			switch flag {
+			case "inline":
+				inline = true
+			default:
+				return nil, fmt.Errorf("unkown tag flag %s", flag)
+			}
 		}
 
 		var fs *StructStruct
@@ -275,7 +298,12 @@ func fieldsOf(v interface{}, tagid string) (res []*StructField) {
 			if field.Anonymous {
 				// Embedded field: recursively descend into its fields.
 				v := value.Addr().Interface()
-				fs = &StructStruct{fname, v, value, fieldsOf(v, tagid)}
+				fields, err := fieldsOf(v, tagid)
+				if err != nil {
+					return nil, fmt.Errorf("%s: %v", fname, err)
+				}
+
+				fs = &StructStruct{fname, v, inline, value, fields}
 			}
 		}
 		res = append(res, &StructField{fname, &field, value, tag, fs})
