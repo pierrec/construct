@@ -13,8 +13,8 @@ type ConfigFileINI struct {
 	// Name of the config file.
 	// If no name is specified, the file is not loaded by LoadConfig()
 	// and stdout is used if Save is true.
-	Name            string `ini:"-"`
-	BackupExtension string `ini:"-"`
+	Name   string `ini:"-"`
+	Backup string `ini:"-"`
 	// Save the config file once the whole config has been loaded.
 	Save bool `ini:"-"`
 
@@ -26,10 +26,14 @@ var (
 	_ FromIO    = (*ConfigFileINI)(nil)
 )
 
+func (c *ConfigFileINI) UsageConfig(name string) string {
+	return c.usageConfig(name, c.Backup)
+}
+
 func (c *ConfigFileINI) LoadConfig() (io.ReadCloser, error) { return c.loadConfig(c.Name, c.Save) }
 
 func (c *ConfigFileINI) WriteConfig() (io.WriteCloser, error) {
-	return c.writeConfig(c.Name, c.BackupExtension, c.Save)
+	return c.writeConfig(c.Name, c.Backup, c.Save)
 }
 
 func (c *ConfigFileINI) new() configIO {

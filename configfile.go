@@ -14,12 +14,14 @@ func (*configFile) DoFlagsConfig() {}
 
 func (*configFile) InitConfig() error { return nil }
 
-func (c *configFile) UsageConfig(name string) string {
+func (c *configFile) usageConfig(name, bak string) string {
 	switch name {
 	case "Name":
 		return "config file name (default=stdout)"
 	case "Save":
 		return "save config to file"
+	case "Backup":
+		return "backup config file extension (default=" + bak + ")"
 	}
 	return ""
 }

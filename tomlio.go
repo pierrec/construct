@@ -15,8 +15,8 @@ type ConfigFileTOML struct {
 	// Name of the config file.
 	// If no name is specified, the file is not loaded by LoadConfig()
 	// and stdout is used if Save is true.
-	Name            string `toml:"-"`
-	BackupExtension string `toml:"-"`
+	Name   string `toml:"-"`
+	Backup string `toml:"-"`
 	// Save the config file once the whole config has been loaded.
 	Save bool `toml:"-"`
 
@@ -28,10 +28,14 @@ var (
 	_ FromIO    = (*ConfigFileTOML)(nil)
 )
 
+func (c *ConfigFileTOML) UsageConfig(name string) string {
+	return c.usageConfig(name, c.Backup)
+}
+
 func (c *ConfigFileTOML) LoadConfig() (io.ReadCloser, error) { return c.loadConfig(c.Name, c.Save) }
 
 func (c *ConfigFileTOML) WriteConfig() (io.WriteCloser, error) {
-	return c.writeConfig(c.Name, c.BackupExtension, c.Save)
+	return c.writeConfig(c.Name, c.Backup, c.Save)
 }
 
 func (c *ConfigFileTOML) new() configIO {
