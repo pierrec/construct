@@ -12,6 +12,8 @@ type configFile struct{}
 
 func (*configFile) DoFlagsConfig() {}
 
+func (*configFile) FlagsUsageConfig() io.Writer { return nil }
+
 func (*configFile) InitConfig() error { return nil }
 
 func (c *configFile) usageConfig(name, bak string) string {

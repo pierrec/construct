@@ -10,10 +10,10 @@
 //  - FromIO interface for files
 //
 // Once the data is loaded from all sources, the InitConfig() method is invoked
-// on the main struct as well as all the embedded ones whether or not they implement
-// the Config interface.
+// on the main struct as well as all the embedded ones not implementing the Config interface.
 //
-// Struct fields can be ignored with the tag cfg:"-" and renamed with any other value.
+// Struct fields can be ignored with the tag cfg:"-" and renamed with any other value
+// preceding the first coma.
 //
 package construct
 
@@ -70,8 +70,9 @@ func init() {
 
 // Config defines the main interface for a config struct.
 // Any embedded struct is processed specifically depending if it implements Config or not:
-//  - if so, it defines a Subcommand, which is automatically loaded if hte subcommand is found in the flags
-//  - if not, it defines a group of config items with a prefix named aafter the type name
+//  - if so, it defines a Subcommand, which is automatically loaded if the subcommand is found in the flags
+//    Subcommands are not case sensitive.
+//  - if not, it defines a group of config items with a prefix named after the type name
 //
 // The embedded type and field names can be overriden by a struct tag specifying the name to be used.
 type Config interface {
@@ -79,17 +80,21 @@ type Config interface {
 
 	// Init initializes the Config struct.
 	// It is automatically invoked on Config and recursively on its embedded
-	// Config structs until an error is encountered.
+	// Config structs that do not implement Config until an error is encountered.
 	InitConfig() error
 
 	// UsageConfig provides the usage message for the given option name.
 	// If the name is the empty string, then the overall usage message is expected.
+	// If the returned value is empty, then the option or subcommand is considered hidden
+	// and not displayed in the flags usage message.
 	UsageConfig(name string) string
 }
 
 // FromFlags defines the interface to set values from command line flags.
 type FromFlags interface {
 	DoFlagsConfig()
+
+	FlagsUsageConfig() io.Writer
 }
 
 // FromEnv defines the interface to set values from environment variables.
@@ -122,10 +127,17 @@ type FromIO interface {
 //  - ini value: provided by the FromIO interface
 //  - default value: values initially set in config
 func Load(config Config) error {
-	return load(config, os.Args)
+	args := os.Args[1:]
+	if flag.Parsed() {
+		// Arguments may have been parsed already, typically from go test binary.
+		args = flag.Args()
+	}
+	return LoadArgs(config, args)
 }
 
-func load(config Config, args []string) error {
+// LoadArgs is equivalent to Load using the given arguments.
+// The first argument must be the real one, not the executable.
+func LoadArgs(config Config, args []string) error {
 	conf, err := newConfig(config)
 	if err != nil {
 		return err
@@ -187,13 +199,13 @@ func (c *config) Load(args []string) (err error) {
 
 	if _, ok := c.raw.(FromFlags); ok {
 		// Update the config with the cli values.
-		c.fs = flag.NewFlagSet("", flag.ContinueOnError)
+		c.initFlags()
 
 		if err := c.buildFlags("", c.root); err != nil {
 			return err
 		}
 
-		if err := c.fs.Parse(args[1:]); err != nil {
+		if err := c.fs.Parse(args); err != nil {
 			if err == flag.ErrHelp {
 				os.Exit(0)
 			}
@@ -214,11 +226,11 @@ func (c *config) Load(args []string) (err error) {
 				return
 			}
 			// New subcommand.
-			sub := args[0]
+			sub := strings.ToLower(args[0])
 			c.subs = append(c.subs, sub)
 			if field := c.root.Lookup(c.subs...); field != nil {
 				if root, conf := getConfig(field); root != nil {
-					err = newConfigFromStruct(root, conf).Load(args)
+					err = newConfigFromStruct(root, conf).Load(args[1:])
 					return
 				}
 			}
@@ -288,7 +300,7 @@ func (c *config) fromNameAll(name string, sep string) []string {
 
 // usage returns the description of the given name.
 //
-// It returns the first non empty result from the UsageConfig method.
+// It returns the first non empty result from the UsageConfig recursive method calls.
 func (c *config) usage(name string) string {
 	res, ok := callUntil(c.root, "UsageConfig", []interface{}{name}, callUsageConfig)
 	if !ok {
@@ -310,6 +322,8 @@ func (c *config) init() error {
 		return nil
 	}
 
+	// Make sure to skip the embedded structs implementing Config (aka subcommands)
+	// as they only get initialized if the subcommand is actually invoked.
 	res, ok := callUntil(c.root, "InitConfig", nil, callInitConfig)
 	if !ok {
 		return nil
@@ -333,7 +347,9 @@ func toName(a, b string) string {
 
 // callUntil recursively calls the given method m with arguments args
 // on the StructStructs until the until function returns true.
-func callUntil(s *structs.StructStruct, m string, args []interface{}, until func([]interface{}) bool) ([]interface{}, bool) {
+// Fields matching the Config interface are ignored.
+func callUntil(s *structs.StructStruct, m string, args []interface{},
+	until func([]interface{}) bool) ([]interface{}, bool) {
 	res, ok := s.Call(m, args)
 	if ok && until(res) {
 		return res, true
@@ -346,7 +362,7 @@ func callUntil(s *structs.StructStruct, m string, args []interface{}, until func
 		if emb == nil {
 			continue
 		}
-		res, ok := emb.CallUntil(m, args, until)
+		res, ok := callUntil(emb, m, args, until)
 		if ok && until(res) {
 			return res, true
 		}

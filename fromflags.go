@@ -3,6 +3,7 @@ package construct
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -11,13 +12,14 @@ import (
 	"github.com/pierrec/construct/internal/structs"
 )
 
-func (c *config) buildFlags(section string, root *structs.StructStruct) (err error) {
-	var subcommands []*structs.StructField
+func (c *config) initFlags() {
+	c.fs = flag.NewFlagSet("", flag.ContinueOnError)
+}
 
+func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 	for _, field := range root.Fields() {
-		// Skip subcommand.
 		if isConfig(field) {
-			subcommands = append(subcommands, field)
+			// Skip subcommand.
 			continue
 		}
 
@@ -35,7 +37,7 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) (err err
 		v := field.Value()
 
 		// Convert lower types.
-		v, err = structs.MarshalValue(v)
+		v, err := structs.MarshalValue(v)
 		if err != nil {
 			return fmt.Errorf("field %s: %v", name, err)
 		}
@@ -60,22 +62,49 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) (err err
 		}
 	}
 
-	// Set the usage message.
+	// Lazily set the usage message.
 	c.fs.Usage = func() {
-		var out = os.Stderr
+		usage := c.buildFlagsUsage()
+		out := c.raw.(FromFlags).FlagsUsageConfig()
+		usage(out)
+	}
+
+	return nil
+}
+
+func (c *config) buildFlagsUsage() func(io.Writer) error {
+	c.initFlags()
+
+	var subcommands []*structs.StructField
+
+	for _, field := range c.root.Fields() {
+		if isConfig(field) {
+			subcommands = append(subcommands, field)
+		}
+	}
+
+	return func(out io.Writer) (err error) {
+		if out == nil {
+			out = os.Stderr
+		}
 
 		// Main usage.
-		usage := c.raw.UsageConfig("")
-		fmt.Fprintf(out, usage)
-
-		// Options for this command.
-		if usage != "" {
-			fmt.Fprintf(out, "\n\n")
+		if usage := c.raw.UsageConfig(""); usage != "" {
+			_, err = fmt.Fprintf(out, "%s\n\n", usage)
+			if err != nil {
+				return err
+			}
 		}
-		fmt.Fprintf(out, "Options:\n")
+		_, err = fmt.Fprintf(out, "Options:\n")
+		if err != nil {
+			return err
+		}
 
 		tabw := tabwriter.NewWriter(out, 8, 0, 1, ' ', 0)
 		c.fs.VisitAll(func(f *flag.Flag) {
+			if err != nil {
+				return
+			}
 			if f.Usage == "" {
 				// Hidden flag.
 				return
@@ -84,35 +113,47 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) (err err
 			v := f.Value.(flag.Getter).Get()
 			switch v.(type) {
 			case bool:
-				fmt.Fprintf(tabw, " -%s\t\t", f.Name)
+				_, err = fmt.Fprintf(tabw, " -%s\t", f.Name)
 			default:
-				fmt.Fprintf(tabw, " -%s\t%T\t", f.Name, v)
+				_, err = fmt.Fprintf(tabw, " -%s\t%T", f.Name, v)
 			}
-			fmt.Fprintf(tabw, "%s\n", f.Usage)
+			if err == nil {
+				_, err = fmt.Fprintf(tabw, "\t%s\n", f.Usage)
+			}
 		})
-		tabw.Flush()
+		if err != nil {
+			return err
+		}
+		if err = tabw.Flush(); err != nil {
+			return err
+		}
 
 		// Subcommands.
-		if len(subcommands) == 0 {
-			return
-		}
-		fmt.Fprintf(out, "\nCommands:\n")
-		for _, field := range subcommands {
-			root, conf := getConfig(field)
-			if root == nil {
-				continue
+		if len(subcommands) > 0 {
+			_, err = fmt.Fprintf(out, "\nCommands:\n")
+			if err != nil {
+				return err
 			}
-			usage := conf.UsageConfig("")
-			if usage == "" {
-				continue
+			for _, field := range subcommands {
+				root, conf := getConfig(field)
+				if root == nil {
+					continue
+				}
+				usage := conf.UsageConfig("")
+				if usage == "" {
+					// Hidden command.
+					continue
+				}
+				cmd := strings.ToLower(root.Name())
+				_, err = fmt.Fprintf(tabw, "\t%s\t%s\n", cmd, usage)
+				if err != nil {
+					return err
+				}
 			}
-			cmd := strings.ToLower(root.Name())
-			fmt.Fprintf(tabw, "\t%s\t%s\n", cmd, usage)
 		}
-		tabw.Flush()
-	}
 
-	return nil
+		return tabw.Flush()
+	}
 }
 
 // The flags that have been updated are removed from the map.

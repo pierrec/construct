@@ -39,6 +39,8 @@ var ConfigLogDefault = ConfigLog{
 // FlagsConfig makes ConfigLog implement FromFlags.
 func (*ConfigLog) DoFlagsConfig() {}
 
+func (*ConfigLog) FlagsUsageConfig() io.Writer { return nil }
+
 // InitConfig makes ConfigLog implement Config.
 func (lg *ConfigLog) InitConfig() error {
 	lvl, err := colog.ParseLevel(lg.Level)
