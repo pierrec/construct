@@ -15,8 +15,8 @@ type configIO interface {
 	Set(value interface{}, keys ...string) error
 	//TODO SetComments(string, ...string)
 
-	ReadFrom(io.Reader) (int64, error)
-	WriteTo(io.Writer) (int64, error)
+	io.ReaderFrom
+	io.WriterTo
 
 	StructTag() string
 }
