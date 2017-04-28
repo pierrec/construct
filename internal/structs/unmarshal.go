@@ -145,7 +145,10 @@ func UnmarshalValue(value reflect.Value, s string, seps ...rune) error {
 			return err
 		}
 		elem := value.Type().Elem()
-		sliceValues := reflect.MakeSlice(value.Type(), 0, len(values))
+		sliceValues := value
+		if sliceValues.IsNil() {
+			sliceValues = reflect.MakeSlice(value.Type(), 0, len(values))
+		}
 		for _, s := range values {
 			v := reflect.New(elem).Elem()
 			if err := UnmarshalValue(v, s); err != nil {
@@ -164,7 +167,10 @@ func UnmarshalValue(value reflect.Value, s string, seps ...rune) error {
 		vType := value.Type()
 		keyType := vType.Key()
 		elemType := vType.Elem()
-		mapValues := reflect.MakeMap(value.Type())
+		mapValues := value
+		if mapValues.IsNil() {
+			mapValues = reflect.MakeMap(value.Type())
+		}
 
 		keyreader := newcsvreadwriter(mapKeySeparator)
 		for _, s := range values {

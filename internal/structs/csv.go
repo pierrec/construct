@@ -3,7 +3,6 @@ package structs
 import (
 	"bytes"
 	"encoding/csv"
-	"strings"
 )
 
 func separators(seps []rune) (sliceSep, mapKeySep rune) {
@@ -34,9 +33,6 @@ type csvreadwriter struct {
 func (r *csvreadwriter) read(s string) ([]string, error) {
 	if s == "" {
 		return nil, nil
-	}
-	if !strings.ContainsRune(s, r.sep) {
-		return []string{s}, nil
 	}
 	r.buf.Reset()
 	if _, err := r.buf.WriteString(s); err != nil {
