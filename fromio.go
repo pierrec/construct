@@ -10,12 +10,20 @@ import (
 // ConfigIO defines the interface for retrieving options stored in
 // various data formats (ini, toml...).
 type ConfigIO interface {
-	Has(...string) bool
-	Get(...string) (interface{}, error)
+	// Has check the existence of the key.
+	Has(keys ...string) bool
+
+	// Get retrieves the value of the given key.
+	Get(keys ...string) (interface{}, error)
+
+	// Set changes the value of the given key.
 	Set(value interface{}, keys ...string) error
 	//TODO SetComments(string, ...string)
 
+	// Used when deserializing options.
 	io.ReaderFrom
+
+	// Used when serializing options.
 	io.WriterTo
 
 	// StructTag returns the tag id used in struct field tags for the data format.
@@ -77,7 +85,7 @@ func ioEncode(cio ConfigIO, keys []string, root *structs.StructStruct) error {
 			continue
 		}
 
-		v := field.Value()
+		v := field.Interface()
 		if err := cio.Set(v, ks...); err != nil {
 			return fmt.Errorf("value %v: %v", v, err)
 		}

@@ -3,36 +3,48 @@ package constructs
 import (
 	"io"
 	"os"
+
+	"github.com/pierrec/construct"
 )
 
-// configFile is embedded into ConfigFile types to provide
-// common behaviour.
-// It does not implement the Config interface as it is not a subcommand.
-type configFile struct{}
+var _ construct.Config = (*ConfigFile)(nil)
 
-func (*configFile) FlagsUsageConfig() io.Writer { return nil }
+// ConfigFile implements most of FromIO except New and should be embedded
+// into another type that provides it.
+type ConfigFile struct {
+	// Name of the config file.
+	// If no name is specified, the file is not loaded by LoadConfig()
+	// and stdout is used if Save is true.
+	Name string `ini:"-" toml:"-"`
+	// Backup file extension.
+	// The config file is first copied before being overwritten using this value.
+	// Leave empty to disable.
+	Backup string `ini:"-" toml:"-"`
+	// Save the config file once the whole config has been loaded.
+	Save bool `ini:"-" toml:"-"`
+}
 
-func (*configFile) InitConfig() error { return nil }
+func (*ConfigFile) InitConfig() error { return nil }
 
-func (c *configFile) usageConfig(name, bak string) string {
+func (c *ConfigFile) UsageConfig(name string) string {
 	switch name {
 	case "Name":
-		return "config file name (default=stdout)"
+		return "Config file name (default=stdout)."
 	case "Save":
-		return "save config to file"
+		return "Save the config to file."
 	case "Backup":
-		return "backup config file extension (default=" + bak + ")"
+		return "Config file backup extension (default=" + c.Backup + ")."
 	}
 	return ""
 }
 
-func (c *configFile) loadConfig(name string, save bool) (io.ReadCloser, error) {
-	if name == "" {
+func (c *ConfigFile) LoadConfig() (io.ReadCloser, error) {
+	if c.Name == "" {
 		return nil, nil
 	}
-	f, err := os.Open(name)
+	f, err := os.Open(c.Name)
 	if err != nil {
-		if os.IsNotExist(err) && save {
+		if os.IsNotExist(err) && c.Save {
 			return nil, nil
 		}
 		return nil, err
@@ -40,23 +52,23 @@ func (c *configFile) loadConfig(name string, save bool) (io.ReadCloser, error) {
 	return f, nil
 }
 
-func (c *configFile) writeConfig(name string, bakExtension string, save bool) (io.WriteCloser, error) {
-	if !save {
+func (c *ConfigFile) WriteConfig() (io.WriteCloser, error) {
+	if !c.Save {
 		return nil, nil
 	}
 
-	if name == "" {
+	if c.Name == "" {
 		return &nopCloser{os.Stdout}, nil
 	}
-	if bakExtension != "" {
-		bname := name + bakExtension
-		if err := os.Rename(name, bname); err != nil {
+	if c.Backup != "" {
+		bname := c.Name + c.Backup
+		if err := os.Rename(c.Name, bname); err != nil {
 			if !os.IsNotExist(err) {
 				return nil, err
 			}
 		}
 	}
-	return os.Create(name)
+	return os.Create(c.Name)
 }
 
 // Wrap the given Writer with a no-op Close method.

@@ -11,33 +11,14 @@ import (
 	"github.com/pierrec/construct/internal/structs"
 )
 
+var _ construct.Config = (*ConfigFileTOML)(nil)
+
 // ConfigFileTOML implements the FromIO interface for TOML formatted files.
 type ConfigFileTOML struct {
-	// Name of the config file.
-	// If no name is specified, the file is not loaded by LoadConfig()
-	// and stdout is used if Save is true.
-	Name   string `toml:"-"`
-	Backup string `toml:"-"`
-	// Save the config file once the whole config has been loaded.
-	Save bool `toml:"-"`
-
-	configFile
+	ConfigFile `cfg:",inline"`
 }
 
-var (
-	_ construct.FromFlags = (*ConfigFileTOML)(nil)
-	_ construct.FromIO    = (*ConfigFileTOML)(nil)
-)
-
-func (c *ConfigFileTOML) UsageConfig(name string) string {
-	return c.usageConfig(name, c.Backup)
-}
-
-func (c *ConfigFileTOML) LoadConfig() (io.ReadCloser, error) { return c.loadConfig(c.Name, c.Save) }
-
-func (c *ConfigFileTOML) WriteConfig() (io.WriteCloser, error) {
-	return c.writeConfig(c.Name, c.Backup, c.Save)
-}
+var _ construct.FromIO = (*ConfigFileTOML)(nil)
 
 func (c *ConfigFileTOML) New() construct.ConfigIO {
 	v, _ := toml.Load("")

@@ -2,40 +2,20 @@ package constructs
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/pierrec/construct"
 	"github.com/pierrec/construct/internal/structs"
 	ini "github.com/pierrec/go-ini"
 )
 
+var _ construct.Config = (*ConfigFileINI)(nil)
+
 // ConfigFileINI implements the FromIO interface for INI formatted files.
 type ConfigFileINI struct {
-	// Name of the config file.
-	// If no name is specified, the file is not loaded by LoadConfig()
-	// and stdout is used if Save is true.
-	Name   string `ini:"-"`
-	Backup string `ini:"-"`
-	// Save the config file once the whole config has been loaded.
-	Save bool `ini:"-"`
-
-	configFile
+	ConfigFile `cfg:",inline"`
 }
 
-var (
-	_ construct.FromFlags = (*ConfigFileINI)(nil)
-	_ construct.FromIO    = (*ConfigFileINI)(nil)
-)
-
-func (c *ConfigFileINI) UsageConfig(name string) string {
-	return c.usageConfig(name, c.Backup)
-}
-
-func (c *ConfigFileINI) LoadConfig() (io.ReadCloser, error) { return c.loadConfig(c.Name, c.Save) }
-
-func (c *ConfigFileINI) WriteConfig() (io.WriteCloser, error) {
-	return c.writeConfig(c.Name, c.Backup, c.Save)
-}
+var _ construct.FromIO = (*ConfigFileINI)(nil)
 
 func (c *ConfigFileINI) New() construct.ConfigIO {
 	v, _ := ini.New(ini.Comment("# "))

@@ -100,8 +100,8 @@ func (f *StructField) Set(v interface{}, seps ...rune) error {
 	return Set(f.value, v, seps...)
 }
 
-// Value returns the interface value of the field.
-func (f *StructField) Value() interface{} {
+// Interface returns the interface value of the field.
+func (f *StructField) Interface() interface{} {
 	return f.value.Interface()
 }
 
@@ -201,6 +201,11 @@ func (s *StructStruct) Lookup(path ...string) *StructField {
 // Fields returns all the fields of the parsed struct.
 func (s *StructStruct) Fields() []*StructField {
 	return s.data
+}
+
+// Interface returns the raw interface of the underlying struct.
+func (s *StructStruct) Interface() interface{} {
+	return s.raw
 }
 
 // CallUntil recursively calls the given method on its StructStruct fields

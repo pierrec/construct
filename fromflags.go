@@ -17,8 +17,14 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 		c.fs = flag.NewFlagSet("", flag.ContinueOnError)
 	}
 
+	config, ok := root.Interface().(Config)
+	if !ok {
+		// Skip non Config structs.
+		return nil
+	}
+
 	for _, field := range root.Fields() {
-		if isConfig(field) {
+		if c, _ := getCommand(field); c != nil {
 			// Skip subcommand.
 			continue
 		}
@@ -32,16 +38,16 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 			continue
 		}
 		name := toName(section, field)
-		lname := strings.ToLower(name)
-		usage := c.usage(field.Name())
 
-		v := field.Value()
+		v := field.Interface()
 
 		// Convert lower types.
 		v, err := structs.MarshalValue(v)
 		if err != nil {
 			return fmt.Errorf("field %s: %v", name, err)
 		}
+		lname := strings.ToLower(name)
+		usage := config.UsageConfig(field.Name())
 
 		switch w := v.(type) {
 		case bool:
@@ -74,11 +80,16 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 }
 
 func (c *config) buildFlagsUsage() func(io.Writer) error {
-	var subcommands []*structs.StructField
+	type subcommand struct {
+		s *structs.StructStruct
+		c Config
+	}
+	var subcommands []subcommand
 
 	for _, field := range c.root.Fields() {
-		if isConfig(field) {
-			subcommands = append(subcommands, field)
+		s, c := getCommand(field)
+		if s != nil {
+			subcommands = append(subcommands, subcommand{s, c})
 		}
 	}
 
@@ -133,17 +144,13 @@ func (c *config) buildFlagsUsage() func(io.Writer) error {
 			if err != nil {
 				return err
 			}
-			for _, field := range subcommands {
-				root, conf := getConfig(field)
-				if root == nil {
-					continue
-				}
-				usage := conf.UsageConfig("")
+			for _, sub := range subcommands {
+				usage := sub.c.UsageConfig("")
 				if usage == "" {
 					// Hidden command.
 					continue
 				}
-				cmd := strings.ToLower(root.Name())
+				cmd := strings.ToLower(sub.s.Name())
 				_, err = fmt.Fprintf(tabw, "\t%s\t%s\n", cmd, usage)
 				if err != nil {
 					return err

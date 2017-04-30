@@ -1,39 +1,3 @@
-// Package construct provides a simple way to load configuration into a struct
-// strongly relying on embedded types and interfaces.
-//
-// Data can be fetched from various sources in order of priority, overriding the
-// struct instance (default) values:
-//  - command line flags
-//  - environment variables
-//  - file in various formats
-//
-// The data sources are defined by implementing the relevant interfaces on the struct:
-//  - FromFlags interface for command line flags
-//  - FromEnv interface for environment variables
-//  - FromIO interface for io sources
-//
-// Once the data is loaded from all sources, the InitConfig() method is invoked
-// on the main struct as well as all the embedded ones not implementing the Config interface.
-//
-// The rules on the struct fields are as follow:
-//  - fields are only processed if they are exported
-//  - a field represents an option for the Config
-//  - an embedded type implementing the Config interface represents a subcommand
-//  - an embedded type not implementing the Config interface is used to group options
-//  - fields processing can be modified used field tags with the following format
-//
-//     `... cfg:"[<key>][,<flag1>[,<flag2>]]" ...`
-//
-// If the key is "-", the field is ignored.
-// If the key is not empty, the value is used as the field name.
-//
-// The following flags are currently supported:
-//
-//     inline       Inline the field which must be a struct, instead of
-//                  processing it as a group of options. Inlined fields must
-//                  not collide with the outer struct ones.
-//                  It has no effect on non embedded types.
-//
 package construct
 
 import (
@@ -44,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/pierrec/construct/internal/structs"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -69,6 +34,9 @@ const (
 var (
 	// EnvSeparator is used to separate grouped options in environment variables.
 	EnvSeparator = "_"
+
+	// ErrUsageRequested is to be returned when the flags usage is requested.
+	ErrUsageRequested = errors.Errorf("flags usage requested")
 )
 
 // Help requested on the cli.
@@ -93,8 +61,6 @@ func init() {
 //
 // The embedded type and field names can be overriden by a struct tag specifying the name to be used.
 type Config interface {
-	DoConfig()
-
 	// Init initializes the Config struct.
 	// It is automatically invoked on Config and recursively on its embedded
 	// Config structs that do not implement Config until an error is encountered.
@@ -112,6 +78,10 @@ type FromFlags interface {
 	// FlagsUsageConfig returns the Writer for use when the usage is requested.
 	// If nil, it defaults to os.Stderr.
 	FlagsUsageConfig() io.Writer
+
+	// FlagsDoneConfig is called with the remaining arguments on the last subcommand
+	// once the flags have been processed.
+	FlagsDoneConfig(args []string) error
 }
 
 // FromEnv defines the interface to set values from environment variables.
@@ -131,6 +101,7 @@ type FromIO interface {
 	// WriteConfig returns the destination for the ini data.
 	WriteConfig() (io.WriteCloser, error)
 
+	// New returns a new instance of ConfigIO.
 	New() ConfigIO
 }
 
@@ -159,21 +130,12 @@ func LoadArgs(config Config, args []string) error {
 	if err != nil {
 		return err
 	}
-	return conf.Load(args)
-}
-
-// Usage writes out the config usage to the given Writer.
-func Usage(config Config, out io.Writer) error {
-	conf, err := newConfig(config)
-	if err != nil {
-		return err
+	err = conf.Load(args)
+	if err == ErrUsageRequested && conf.fs != nil {
+		conf.fs.Usage()
+		return nil
 	}
-	if err := conf.buildFlags("", conf.root); err != nil {
-		return err
-	}
-	usage := conf.buildFlagsUsage()
-
-	return usage(out)
+	return err
 }
 
 type config struct {
@@ -237,7 +199,7 @@ func (c *config) Load(args []string) (err error) {
 		return err
 	}
 
-	if _, ok := c.raw.(FromFlags); ok {
+	if from, ok := c.raw.(FromFlags); ok {
 		// Update the config with the cli values.
 		if err := c.buildFlags("", c.root); err != nil {
 			return err
@@ -260,19 +222,27 @@ func (c *config) Load(args []string) (err error) {
 				return
 			}
 			args := c.fs.Args()
-			if len(args) == 0 {
-				return
-			}
-			// New subcommand.
-			sub := strings.ToLower(args[0])
-			c.subs = append(c.subs, sub)
-			if field := c.root.Lookup(c.subs...); field != nil {
-				if root, conf := getConfig(field); root != nil {
-					err = newConfigFromStruct(root, conf).Load(args[1:])
+			if len(args) > 0 {
+				// Maybe a new subcommand.
+				sub := strings.ToLower(args[0])
+				field := c.root.Lookup(sub)
+				if field == nil {
+					goto flagsDone
+				}
+				emb := field.Embedded()
+				if emb == nil {
+					goto flagsDone
+				}
+				// A subcommand must be a Config and Flags.
+				conf, okc := emb.Interface().(Config)
+				_, okf := emb.Interface().(FromFlags)
+				if okc && okf {
+					err = newConfigFromStruct(emb, conf).Load(args[1:])
 					return
 				}
 			}
-			err = fmt.Errorf("unknown subcommand %s", sub)
+		flagsDone:
+			err = from.FlagsDoneConfig(args)
 		}()
 	}
 
@@ -339,22 +309,6 @@ func (c *config) fromNameAll(name string, sep string) []string {
 	return strings.Split(c.trans[name], sep)
 }
 
-// usage returns the description of the given name.
-//
-// It returns the first non empty result from the UsageConfig recursive method calls.
-func (c *config) usage(name string) string {
-	res, ok := callUntil(c.root, "UsageConfig", []interface{}{name}, callUsageConfig)
-	if !ok {
-		return ""
-	}
-	return res[0].(string)
-}
-
-func callUsageConfig(in []interface{}) bool {
-	s := in[0].(string)
-	return s != ""
-}
-
 // init invokes the InitConfig method recursively on the main type
 // and all the embedded ones. It stops at the first error encountered.
 func (c *config) init() error {
@@ -409,11 +363,14 @@ func callUntil(s *structs.StructStruct, m string, args []interface{},
 		return res, true
 	}
 	for _, field := range s.Fields() {
-		if isConfig(field) {
+		if c, _ := getCommand(field); c != nil {
 			continue
 		}
 		emb := field.Embedded()
 		if emb == nil {
+			continue
+		}
+		if _, ok := emb.Interface().(Config); !ok {
 			continue
 		}
 		res, ok := callUntil(emb, m, args, until)
@@ -424,20 +381,17 @@ func callUntil(s *structs.StructStruct, m string, args []interface{},
 	return nil, false
 }
 
-// isConfig returns whether or not the field implements the Config interface.
-func isConfig(field *structs.StructField) bool {
-	if field == nil {
-		return false
+// getCommand returns the struct implementing the Config and FromFlags interfaces, if any.
+func getCommand(field *structs.StructField) (*structs.StructStruct, Config) {
+	emb := field.Embedded()
+	if emb == nil {
+		return nil, nil
 	}
-	_, ok := field.PtrValue().(Config)
-	return ok && field.Embedded() != nil
-}
-
-// getConfig returns the struct implementing the Config interface, if any.
-func getConfig(field *structs.StructField) (*structs.StructStruct, Config) {
-	if nc, ok := field.PtrValue().(Config); ok {
-		if emb := field.Embedded(); emb != nil {
-			return emb, nc
+	// A subcommand must implement Config and Flags.
+	embi := emb.Interface()
+	if conf, ok := embi.(Config); ok {
+		if _, ok = embi.(FromFlags); ok {
+			return emb, conf
 		}
 	}
 	return nil, nil

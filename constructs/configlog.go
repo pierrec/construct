@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"comail.io/go/colog"
-	"github.com/pierrec/construct"
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -24,10 +23,6 @@ type ConfigLog struct {
 	log *colog.CoLog
 }
 
-var (
-	_ construct.FromFlags = (*ConfigLog)(nil)
-)
-
 // ConfigLogDefault represents sensible values for a default ConfigLog.
 var ConfigLogDefault = ConfigLog{
 	Level:      "error",
@@ -36,9 +31,6 @@ var ConfigLogDefault = ConfigLog{
 	MaxBackups: 3,
 	LocalTime:  true,
 }
-
-// FlagsUsageConfig makes ConfigLog implement FromFlags.
-func (*ConfigLog) FlagsUsageConfig() io.Writer { return nil }
 
 // InitConfig makes ConfigLog implement Config.
 func (lg *ConfigLog) InitConfig() error {
