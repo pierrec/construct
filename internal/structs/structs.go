@@ -184,15 +184,29 @@ func (s *StructStruct) Lookup(path ...string) *StructField {
 	name := path[0]
 	if len(path) == 1 {
 		for _, item := range s.data {
-			if item.Name() == name {
-				return item
+			emb := item.Embedded()
+			if emb == nil || !emb.Inlined() {
+				if item.Name() == name {
+					return item
+				}
+				continue
+			}
+			if field := emb.Lookup(name); field != nil {
+				return field
 			}
 		}
 		return nil
 	}
 	for _, item := range s.data {
-		if item.embedded != nil && item.Name() == name {
-			return item.embedded.Lookup(path[1:]...)
+		emb := item.Embedded()
+		if emb == nil {
+			continue
+		}
+		if emb.Inlined() {
+			return emb.Lookup(path...)
+		}
+		if item.Name() == name {
+			return emb.Lookup(path[1:]...)
 		}
 	}
 	return nil
