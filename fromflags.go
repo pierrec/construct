@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -15,6 +16,7 @@ import (
 func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 	if c.fs == nil {
 		c.fs = flag.NewFlagSet("", flag.ContinueOnError)
+		c.refs = make(map[string]interface{})
 	}
 
 	config, ok := root.Interface().(Config)
@@ -49,24 +51,27 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 		lname := strings.ToLower(name)
 		usage := config.UsageConfig(field.Name())
 
+		// Assign flags and keep track of the pointers of the set value.
+		var ref interface{}
 		switch w := v.(type) {
 		case bool:
-			c.fs.Bool(lname, w, usage)
+			ref = c.fs.Bool(lname, w, usage)
 		case time.Duration:
-			c.fs.Duration(lname, w, usage)
+			ref = c.fs.Duration(lname, w, usage)
 		case float64:
-			c.fs.Float64(lname, w, usage)
+			ref = c.fs.Float64(lname, w, usage)
 		case int:
-			c.fs.Int(lname, w, usage)
+			ref = c.fs.Int(lname, w, usage)
 		case int64:
-			c.fs.Int64(lname, w, usage)
+			ref = c.fs.Int64(lname, w, usage)
 		case string:
-			c.fs.String(lname, w, usage)
+			ref = c.fs.String(lname, w, usage)
 		case uint:
-			c.fs.Uint(lname, w, usage)
+			ref = c.fs.Uint(lname, w, usage)
 		case uint64:
-			c.fs.Uint64(lname, w, usage)
+			ref = c.fs.Uint64(lname, w, usage)
 		}
+		c.refs[lname] = ref
 	}
 
 	// Lazily set the usage message.
@@ -120,7 +125,8 @@ func (c *config) buildFlagsUsage() func(io.Writer) error {
 				return
 			}
 
-			v := f.Value.(flag.Getter).Get()
+			refv := c.refs[f.Name]
+			v := reflect.ValueOf(refv).Elem().Interface()
 			switch v.(type) {
 			case bool:
 				_, err = fmt.Fprintf(tabw, " -%s\t", f.Name)
@@ -171,7 +177,9 @@ func (c *config) updateFlags() (err error) {
 		names := c.fromNameAll(f.Name, OptionSeparator)
 		field := c.root.Lookup(names...)
 
-		v := f.Value.(flag.Getter).Get()
+		// Cached references are pointers to the flag set value.
+		refv := c.refs[f.Name]
+		v := reflect.ValueOf(refv).Elem().Interface()
 		err = field.Set(v)
 		if err != nil {
 			err = fmt.Errorf("flag %s: %v", f.Name, err)

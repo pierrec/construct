@@ -150,7 +150,8 @@ type config struct {
 	// Current subcommands.
 	subs []string
 
-	fs *flag.FlagSet
+	fs   *flag.FlagSet
+	refs map[string]interface{} // Holds pointers of flags values.
 }
 
 func newConfig(c Config) (*config, error) {
