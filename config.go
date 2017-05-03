@@ -92,8 +92,7 @@ type FromEnv interface {
 }
 
 // FromIO defines the interface to set values from an io source (typically a file).
-// The supported formats are currently: ini and toml.
-//TODO add support for json, yaml.
+// The supported formats are currently: ini, toml, json and yaml.
 type FromIO interface {
 	// LoadConfig returns the source for the data.
 	LoadConfig() (io.ReadCloser, error)

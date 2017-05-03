@@ -15,13 +15,13 @@ type ConfigFile struct {
 	// Name of the config file.
 	// If no name is specified, the file is not loaded by LoadConfig()
 	// and stdout is used if Save is true.
-	Name string `ini:"-" toml:"-"`
+	Name string `ini:"-" toml:"-" json:"-" yaml:"-"`
 	// Backup file extension.
 	// The config file is first copied before being overwritten using this value.
 	// Leave empty to disable.
-	Backup string `ini:"-" toml:"-"`
+	Backup string `ini:"-" toml:"-" json:"-" yaml:"-"`
 	// Save the config file once the whole config has been loaded.
-	Save bool `ini:"-" toml:"-"`
+	Save bool `ini:"-" toml:"-" json:"-" yaml:"-"`
 }
 
 func (*ConfigFile) InitConfig() error { return nil }
