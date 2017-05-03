@@ -280,8 +280,11 @@ func (c *config) Load(args []string) (err error) {
 				keys := c.fromNameAll(name, OptionSeparator)
 				field := c.root.Lookup(keys...)
 				if !cio.Has(keys...) {
-					// v := field.Value()
-					//TODO cio.Set(v, keys...)
+					// Add the option to the store for saving.
+					v := field.Interface()
+					if err := cio.Set(v, keys...); err != nil {
+						return err
+					}
 					continue
 				}
 				v, err := cio.Get(keys...)
