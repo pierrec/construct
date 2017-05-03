@@ -1,5 +1,5 @@
 // Package construct provides a simple way to load configuration into a struct,
-// strongly relying on embedded types and interfaces.
+// strongly relying on embedded types and interfaces defined on those.
 //
 // Data can be fetched from various sources in order of priority, overriding the
 // struct instance (default) values:
@@ -12,8 +12,9 @@
 //  - FromEnv interface for environment variables
 //  - FromIO interface for io sources
 //
-// Subcommands in command line flags is supported and defined by embeddeing a struct
-// implementing both the Config and FromFlags interface.
+// Subcommands in command line flags is supported and defined by embedding a struct
+// implementing both the Config and FromFlags interfaces. The FlagsDoneConfig() method
+// is invoked on the last subcommand with the remaining command line arguments.
 //
 // Once the data is loaded from all sources, the InitConfig() method is invoked
 // on the main struct as well as all the embedded ones except subcommands.

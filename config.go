@@ -54,16 +54,16 @@ func init() {
 }
 
 // Config defines the main interface for a config struct.
-// Any embedded struct is processed specifically depending if it implements Config or not:
-//  - if so, it defines a Subcommand, which is automatically loaded if the subcommand is found in the flags
+// Any embedded struct is processed specifically depending on the interfaces it implements:
+//  - Config: it defines a group of config items with a prefix set to the type name
+//  - Config and FromFlags: it defines a subcommand, which is automatically loaded from flags.
 //    Subcommands are not case sensitive.
-//  - if not, it defines a group of config items with a prefix named after the type name
 //
-// The embedded type and field names can be overriden by a struct tag specifying the name to be used.
+// The embedded type names and field names can be overriden by a struct tag specifying the name to be used.
 type Config interface {
 	// Init initializes the Config struct.
-	// It is automatically invoked on Config and recursively on its embedded
-	// Config structs that do not implement Config until an error is encountered.
+	// It is automatically invoked on Config and recursively on its non subcommand embedded
+	// structs until an error is encountered.
 	InitConfig() error
 
 	// UsageConfig provides the usage message for the given option name.
@@ -95,14 +95,14 @@ type FromEnv interface {
 // The supported formats are currently: ini and toml.
 //TODO add support for json, yaml.
 type FromIO interface {
-	// LoadConfig returns the source for the ini data.
+	// LoadConfig returns the source for the data.
 	LoadConfig() (io.ReadCloser, error)
 
-	// WriteConfig returns the destination for the ini data.
+	// WriteConfig returns the destination for the data.
 	WriteConfig() (io.WriteCloser, error)
 
 	// New returns a new instance of ConfigIO.
-	New() ConfigIO
+	New() Store
 }
 
 // Load populates the config with data from various sources.

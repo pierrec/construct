@@ -7,9 +7,11 @@ import (
 	"github.com/pierrec/construct/internal/structs"
 )
 
-// ConfigIO defines the interface for retrieving options stored in
-// various data formats (ini, toml...).
-type ConfigIO interface {
+// Store defines the interface for retrieving options stored in
+// various data formats.
+//
+// Check the constructs package for implementations.
+type Store interface {
 	// Has check the existence of the key.
 	Has(keys ...string) bool
 
@@ -27,10 +29,11 @@ type ConfigIO interface {
 	io.WriterTo
 
 	// StructTag returns the tag id used in struct field tags for the data format.
+	// Field tags set to "-" are ignored.
 	StructTag() string
 }
 
-func ioLoad(from FromIO) (ConfigIO, error) {
+func ioLoad(from FromIO) (Store, error) {
 	if from == nil {
 		return nil, nil
 	}
@@ -43,50 +46,53 @@ func ioLoad(from FromIO) (ConfigIO, error) {
 	}
 	defer src.Close()
 
-	cio := from.New()
-	if _, err := cio.ReadFrom(src); err != nil {
+	store := from.New()
+	if _, err := store.ReadFrom(src); err != nil {
 		return nil, err
 	}
-	return cio, nil
+	return store, nil
 }
 
-func (c *config) ioSave(cio ConfigIO, from FromIO) error {
+func (c *config) ioSave(store Store, from FromIO) error {
 	dest, err := from.WriteConfig()
 	if err != nil || dest == nil {
 		return err
 	}
 	defer dest.Close()
-	if cio == nil {
-		cio = from.New()
+	if store == nil {
+		store = from.New()
 	}
-	if err := ioEncode(cio, nil, c.root); err != nil {
+	if err := ioEncode(store, nil, c.root); err != nil {
 		return err
 	}
-	_, err = cio.WriteTo(dest)
+	_, err = store.WriteTo(dest)
 
 	return err
 }
 
-// ioEncode encodes root into the ConfigIO storage format.
-func ioEncode(cio ConfigIO, keys []string, root *structs.StructStruct) error {
-	tag := cio.StructTag()
+// ioEncode encodes root into the Store storage format.
+func ioEncode(store Store, keys []string, root *structs.StructStruct) error {
+	tag := store.StructTag()
 
 	for _, field := range root.Fields() {
-		if field.Tag().Get(tag) == "-" {
+		if key := field.Tag().Get(tag); len(key) > 0 && key[0] == '-' {
 			// Skip discarded fields.
 			continue
 		}
 
 		ks := append(keys, field.Name())
 		if emb := field.Embedded(); emb != nil {
-			if err := ioEncode(cio, ks, emb); err != nil {
+			if emb.Inlined() {
+				ks = ks[:len(ks)-1]
+			}
+			if err := ioEncode(store, ks, emb); err != nil {
 				return err
 			}
 			continue
 		}
 
 		v := field.Interface()
-		if err := cio.Set(v, ks...); err != nil {
+		if err := store.Set(v, ks...); err != nil {
 			return fmt.Errorf("value %v: %v", v, err)
 		}
 	}
