@@ -23,7 +23,7 @@ import (
 //  - encoding.TextMarshaler -> string
 //
 // The following types are returned as is:
-//  - bool, time.Duration, float64, int, int64, string, uint, uint64
+//  - bool, time.Duration, float64, int64, string, uint64
 //
 // sliceSep, mapKeySep
 func MarshalValue(v interface{}, seps ...rune) (interface{}, error) {

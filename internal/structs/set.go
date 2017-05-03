@@ -13,8 +13,11 @@ func Set(value reflect.Value, v interface{}, seps ...rune) error {
 		return errCannotSet
 	}
 
-	if s, ok := v.(string); ok {
-		return UnmarshalValue(value, s, seps...)
+	switch v := v.(type) {
+	case nil:
+		return nil
+	case string:
+		return UnmarshalValue(value, v, seps...)
 	}
 
 	val := reflect.ValueOf(v)
