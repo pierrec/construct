@@ -2,11 +2,26 @@ package constructs
 
 import (
 	"fmt"
+	"io"
 	"reflect"
 
 	"github.com/pierrec/construct"
 	"github.com/pierrec/construct/internal/structs"
 )
+
+// reader caches the number of bytes read.
+type reader struct {
+	n int64
+	io.Reader
+}
+
+func (r *reader) read() int64 { return r.n }
+
+func (r *reader) Read(b []byte) (int, error) {
+	n, err := r.Reader.Read(b)
+	r.n += int64(n)
+	return n, err
+}
 
 // marshal makes sure the given value v is suitable for storage.
 // It may update the Store directly in which case the returned value is nil.
@@ -83,31 +98,4 @@ func marshalMap(store construct.Store, marshal func([]string, interface{}) (inte
 		store.Set(mel, nkeys...)
 	}
 	return nil
-}
-
-// unmarshalMap remarshals generically unmarshalled data map[string]interface{} items
-// of type []interface into their relevant type with structs.MarshalValue.
-func unmarshalMap(data map[string]interface{}) error {
-	for k, v := range data {
-		w, err := unmarshal(v)
-		if err != nil {
-			return fmt.Errorf("%s: %v", k, err)
-		}
-		data[k] = w
-	}
-	return nil
-}
-
-func unmarshal(v interface{}) (interface{}, error) {
-	switch w := v.(type) {
-	case map[string]interface{}:
-		err := unmarshalMap(w)
-		return v, err
-	case []interface{}:
-		if len(w) == 0 {
-			return "", nil
-		}
-		return structs.MarshalValue(v, nil)
-	}
-	return v, nil
 }

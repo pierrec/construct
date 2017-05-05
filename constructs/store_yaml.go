@@ -125,7 +125,6 @@ func (store *yamlStore) ReadFrom(r io.Reader) (n int64, err error) {
 	if err != nil {
 		return
 	}
-	err = unmarshalMap(store.data)
 	return
 }
 

@@ -118,14 +118,11 @@ func (store *jsonStore) set(data map[string]interface{}, v interface{}, keys []s
 	return store.set(m, v, keys[1:])
 }
 
-func (store *jsonStore) ReadFrom(r io.Reader) (n int64, err error) {
-	dec := json.NewDecoder(r)
-	err = dec.Decode(&store.data)
-	if err != nil {
-		return
-	}
-	err = unmarshalMap(store.data)
-	return
+func (store *jsonStore) ReadFrom(r io.Reader) (int64, error) {
+	nr := &reader{Reader: r}
+	dec := json.NewDecoder(nr)
+	err := dec.Decode(&store.data)
+	return nr.read(), err
 }
 
 func (store *jsonStore) WriteTo(w io.Writer) (int64, error) {

@@ -103,13 +103,12 @@ func (store *tomlStore) Set(v interface{}, keys ...string) error {
 }
 
 func (store *tomlStore) ReadFrom(r io.Reader) (int64, error) {
-	t, err := toml.LoadReader(r)
-	if err != nil {
-		return 0, err
+	nr := &reader{Reader: r}
+	t, err := toml.LoadReader(nr)
+	if err == nil {
+		store.toml = t
 	}
-	store.toml = t
-	//TODO bytes read
-	return 0, nil
+	return nr.read(), err
 }
 
 func (store *tomlStore) WriteTo(w io.Writer) (int64, error) {
