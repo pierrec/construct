@@ -26,9 +26,13 @@ import (
 //  - bool, time.Duration, float64, int64, string, uint64
 //
 // sliceSep, mapKeySep
-func MarshalValue(v interface{}, seps ...rune) (interface{}, error) {
+func MarshalValue(v interface{}, seps []rune) (interface{}, error) {
 	// v = indirect(v)
-	sliceSeparator, mapKeySeparator := separators(seps)
+	var sep rune
+	if len(seps) > 0 {
+		sep = seps[0]
+		seps = seps[1:]
+	}
 
 	switch w := v.(type) {
 	case nil:
@@ -96,6 +100,11 @@ func MarshalValue(v interface{}, seps ...rune) (interface{}, error) {
 		return string(bts), nil
 	}
 
+	if sep == 0 {
+		sep = SliceSeparator
+	}
+	csv := newcsvreadwriter(sep)
+
 	var lst []string
 	value := reflect.ValueOf(v)
 	switch value.Kind() {
@@ -104,7 +113,7 @@ func MarshalValue(v interface{}, seps ...rune) (interface{}, error) {
 		lst = make([]string, n)
 		for i := 0; i < n; i++ {
 			v := value.Index(i)
-			w, err := MarshalValue(v.Interface())
+			w, err := MarshalValue(v.Interface(), seps)
 			if err != nil {
 				return nil, err
 			}
@@ -112,12 +121,18 @@ func MarshalValue(v interface{}, seps ...rune) (interface{}, error) {
 		}
 
 	case reflect.Map:
-		keycsv := newcsvreadwriter(mapKeySeparator)
+		if len(seps) > 0 {
+			sep = seps[0]
+			seps = seps[1:]
+		} else {
+			sep = MapKeySeparator
+		}
+		keycsv := newcsvreadwriter(sep)
 		keys := value.MapKeys()
 		lst = make([]string, len(keys))
 		for i, key := range keys {
 			v := value.MapIndex(key)
-			w, err := MarshalValue(v.Interface())
+			w, err := MarshalValue(v.Interface(), seps)
 			if err != nil {
 				return nil, err
 			}
@@ -135,7 +150,6 @@ func MarshalValue(v interface{}, seps ...rune) (interface{}, error) {
 		return nil, fmt.Errorf("marshal: unsupported type %T", v)
 	}
 
-	csv := newcsvreadwriter(sliceSeparator)
 	return csv.write(lst...)
 }
 

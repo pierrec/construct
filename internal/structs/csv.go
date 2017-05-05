@@ -5,18 +5,6 @@ import (
 	"encoding/csv"
 )
 
-func separators(seps []rune) (sliceSep, mapKeySep rune) {
-	sliceSeparator := SliceSeparator
-	if len(seps) > 0 {
-		sliceSeparator = seps[0]
-	}
-	mapKeySeparator := MapKeySeparator
-	if len(seps) > 1 {
-		mapKeySeparator = seps[1]
-	}
-	return sliceSeparator, mapKeySeparator
-}
-
 func newcsvreadwriter(sep rune) *csvreadwriter {
 	buf := bytes.NewBuffer(nil)
 	return &csvreadwriter{sep: sep, buf: buf}

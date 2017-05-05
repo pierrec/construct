@@ -8,7 +8,7 @@ import (
 // Set assigns v to the value.
 // If v is a string but value is not, then Set attempts to deserialize it
 // using UnmarshalValue().
-func Set(value reflect.Value, v interface{}, seps ...rune) error {
+func Set(value reflect.Value, v interface{}, seps []rune) error {
 	if !value.CanSet() {
 		return errCannotSet
 	}
@@ -17,7 +17,7 @@ func Set(value reflect.Value, v interface{}, seps ...rune) error {
 	case nil:
 		return nil
 	case string:
-		return UnmarshalValue(value, v, seps...)
+		return UnmarshalValue(value, v, seps)
 	}
 
 	val := reflect.ValueOf(v)

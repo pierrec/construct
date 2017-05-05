@@ -51,7 +51,7 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 		v := field.Interface()
 
 		// Convert lower types.
-		v, err := structs.MarshalValue(v)
+		v, err := structs.MarshalValue(v, nil)
 		if err != nil {
 			return fmt.Errorf("field %s: %v", name, err)
 		}

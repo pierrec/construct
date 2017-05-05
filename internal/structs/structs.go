@@ -48,7 +48,7 @@ var (
 // Fields tags with a non empty value will be renamed to that value.
 //
 // The input must be a pointer to a struct.
-func NewStruct(s interface{}, tagid string) (*StructStruct, error) {
+func NewStruct(s interface{}, tagid, septagid string) (*StructStruct, error) {
 	if s, ok := s.(*StructStruct); ok {
 		return s, nil
 	}
@@ -60,7 +60,7 @@ func NewStruct(s interface{}, tagid string) (*StructStruct, error) {
 	if v.Elem().Kind() != reflect.Struct {
 		return nil, errNoStruct
 	}
-	fields, err := fieldsOf(s, tagid)
+	fields, err := fieldsOf(s, tagid, septagid)
 	if err != nil {
 		return nil, err
 	}
@@ -79,6 +79,7 @@ type StructField struct {
 	field    *reflect.StructField
 	value    reflect.Value
 	tag      reflect.StructTag
+	seps     []rune
 	embedded *StructStruct
 }
 
@@ -96,8 +97,8 @@ func (f *StructField) Embedded() *StructStruct {
 // If the value is a string but the field is not,
 // then its value is deserialized using encoding.Unmarshaler
 // or in a best effort way.
-func (f *StructField) Set(v interface{}, seps ...rune) error {
-	return Set(f.value, v, seps...)
+func (f *StructField) Set(v interface{}) error {
+	return Set(f.value, v, f.seps)
 }
 
 // Interface returns the interface value of the field.
@@ -268,7 +269,7 @@ func (s *StructStruct) Call(m string, args []interface{}) ([]interface{}, bool) 
 }
 
 // List the fields of the input which must be a pointer to a struct.
-func fieldsOf(v interface{}, tagid string) (res []*StructField, err error) {
+func fieldsOf(v interface{}, tagid, septagid string) (res []*StructField, err error) {
 	value := reflect.ValueOf(v).Elem()
 	vType := value.Type()
 	for i, n := 0, value.NumField(); i < n; i++ {
@@ -317,7 +318,7 @@ func fieldsOf(v interface{}, tagid string) (res []*StructField, err error) {
 			if field.Anonymous {
 				// Embedded field: recursively descend into its fields.
 				v := value.Addr().Interface()
-				fields, err := fieldsOf(v, tagid)
+				fields, err := fieldsOf(v, tagid, septagid)
 				if err != nil {
 					return nil, fmt.Errorf("%s: %v", fname, err)
 				}
@@ -325,7 +326,8 @@ func fieldsOf(v interface{}, tagid string) (res []*StructField, err error) {
 				fs = &StructStruct{fname, v, inline, value, fields}
 			}
 		}
-		res = append(res, &StructField{fname, &field, value, tag, fs})
+		seps := []rune(tag.Get(septagid))
+		res = append(res, &StructField{fname, &field, value, tag, seps, fs})
 	}
 	return
 }
