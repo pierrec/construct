@@ -53,7 +53,7 @@ func (store *iniStore) Get(keys ...string) (interface{}, error) {
 
 func (store *iniStore) Set(v interface{}, keys ...string) error {
 	section, key := store.keys(keys)
-	mv, err := structs.MarshalValue(v)
+	mv, err := structs.MarshalValue(v, nil)
 	if err != nil {
 		return err
 	}

@@ -116,6 +116,11 @@ func (f *StructField) Tag() reflect.StructTag {
 	return f.tag
 }
 
+// MarshalValue returns the field value marshaled by MarshalValue().
+func (f *StructField) MarshalValue() (interface{}, error) {
+	return MarshalValue(f.Interface(), f.seps)
+}
+
 // StructStruct represents a decomposed struct.
 type StructStruct struct {
 	name    string

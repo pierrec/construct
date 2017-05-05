@@ -94,7 +94,7 @@ func (store *jsonStore) marshal(keys []string, v interface{}) (interface{}, erro
 		uint, uint8, uint16, uint32, uint64,
 		float32, float64:
 	case time.Time, time.Duration:
-		return structs.MarshalValue(v)
+		return structs.MarshalValue(v, nil)
 	default:
 		return marshal(store, store.marshal, keys, v)
 	}

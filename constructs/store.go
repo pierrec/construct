@@ -43,7 +43,7 @@ func marshal(store construct.Store, marshal func([]string, interface{}) (interfa
 		return nil, err
 
 	default:
-		mv, err := structs.MarshalValue(v)
+		mv, err := structs.MarshalValue(v, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -82,6 +82,8 @@ func marshalMap(store construct.Store, marshal func([]string, interface{}) (inte
 	return nil
 }
 
+// unmarshalMap remarshals generically unmarshalled data map[string]interface{} items
+// of type []interface into their relevant type with structs.MarshalValue.
 func unmarshalMap(data map[string]interface{}) error {
 	for k, v := range data {
 		w, err := unmarshal(v)
@@ -102,7 +104,7 @@ func unmarshal(v interface{}) (interface{}, error) {
 		if len(w) == 0 {
 			return "", nil
 		}
-		v, err = structs.MarshalValue(v)
+		v, err = structs.MarshalValue(v, nil)
 	}
 	return v, err
 }

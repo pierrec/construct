@@ -26,11 +26,7 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 		// Skip non Config structs.
 		return nil
 	}
-	from, ok := root.Interface().(FromFlags)
-	if !ok {
-		// Skip non FromFlags structs.
-		return nil
-	}
+	from, isFlags := root.Interface().(FromFlags)
 
 	for _, field := range root.Fields() {
 		if c, _ := getCommand(field); c != nil {
@@ -48,17 +44,18 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 		}
 		name := toName(section, field)
 
-		v := field.Interface()
-
 		// Convert lower types.
-		v, err := structs.MarshalValue(v, nil)
+		v, err := field.MarshalValue()
 		if err != nil {
 			return fmt.Errorf("field %s: %v", name, err)
 		}
 		lname := strings.ToLower(name)
 		usage := config.UsageConfig(field.Name())
-		short := from.FlagsShortConfig(field.Name())
-		short = strings.ToLower(short)
+		var short string
+		if isFlags {
+			short = from.FlagsShortConfig(field.Name())
+			short = strings.ToLower(short)
+		}
 
 		// Assign flags and keep track of the pointers of the set value.
 		var ref interface{}

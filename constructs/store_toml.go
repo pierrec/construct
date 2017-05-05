@@ -42,10 +42,10 @@ func (store *tomlStore) Get(keys ...string) (interface{}, error) {
 	case int64, float64, string, bool, time.Time:
 	case *toml.TomlTree:
 		m := w.ToMap()
-		return structs.MarshalValue(m)
+		return structs.MarshalValue(m, nil)
 	default:
 		// Convert the value to make sure it can be Set properly.
-		return structs.MarshalValue(v)
+		return structs.MarshalValue(v, nil)
 	}
 	return v, nil
 }
