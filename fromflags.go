@@ -1,7 +1,6 @@
 package construct
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -11,17 +10,25 @@ import (
 	"time"
 
 	"github.com/pierrec/construct/internal/structs"
+	flag "github.com/spf13/pflag"
 )
 
 func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 	if c.fs == nil {
 		c.fs = flag.NewFlagSet("", flag.ContinueOnError)
+		// Make sure the parsing stops when a command is found.
+		c.fs.SetInterspersed(false)
 		c.refs = make(map[string]interface{})
 	}
 
 	config, ok := root.Interface().(Config)
 	if !ok {
 		// Skip non Config structs.
+		return nil
+	}
+	from, ok := root.Interface().(FromFlags)
+	if !ok {
+		// Skip non FromFlags structs.
 		return nil
 	}
 
@@ -50,26 +57,28 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 		}
 		lname := strings.ToLower(name)
 		usage := config.UsageConfig(field.Name())
+		short := from.FlagsShortConfig(field.Name())
+		short = strings.ToLower(short)
 
 		// Assign flags and keep track of the pointers of the set value.
 		var ref interface{}
 		switch w := v.(type) {
 		case bool:
-			ref = c.fs.Bool(lname, w, usage)
+			ref = c.fs.BoolP(lname, short, w, usage)
 		case time.Duration:
-			ref = c.fs.Duration(lname, w, usage)
+			ref = c.fs.DurationP(lname, short, w, usage)
 		case float64:
-			ref = c.fs.Float64(lname, w, usage)
+			ref = c.fs.Float64P(lname, short, w, usage)
 		case int:
-			ref = c.fs.Int(lname, w, usage)
+			ref = c.fs.IntP(lname, short, w, usage)
 		case int64:
-			ref = c.fs.Int64(lname, w, usage)
+			ref = c.fs.Int64P(lname, short, w, usage)
 		case string:
-			ref = c.fs.String(lname, w, usage)
+			ref = c.fs.StringP(lname, short, w, usage)
 		case uint:
-			ref = c.fs.Uint(lname, w, usage)
+			ref = c.fs.UintP(lname, short, w, usage)
 		case uint64:
-			ref = c.fs.Uint64(lname, w, usage)
+			ref = c.fs.Uint64P(lname, short, w, usage)
 		}
 		c.refs[lname] = ref
 	}
@@ -127,11 +136,15 @@ func (c *config) buildFlagsUsage() func(io.Writer) error {
 
 			refv := c.refs[f.Name]
 			v := reflect.ValueOf(refv).Elem().Interface()
+			short := f.Shorthand
+			if short != "" {
+				short = "-" + short + ", "
+			}
 			switch v.(type) {
 			case bool:
-				_, err = fmt.Fprintf(tabw, " -%s\t", f.Name)
+				_, err = fmt.Fprintf(tabw, " %s\t--%s\t", short, f.Name)
 			default:
-				_, err = fmt.Fprintf(tabw, " -%s\t%T", f.Name, v)
+				_, err = fmt.Fprintf(tabw, " %s\t--%s\t%T", short, f.Name, v)
 			}
 			if err == nil {
 				_, err = fmt.Fprintf(tabw, "\t%s\n", f.Usage)

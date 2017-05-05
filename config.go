@@ -1,7 +1,6 @@
 package construct
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/pierrec/construct/internal/structs"
 	"github.com/pkg/errors"
+	flag "github.com/spf13/pflag"
 )
 
 const (
@@ -16,6 +16,16 @@ const (
 	// Struct fields with tag cfg:"-" are discarded.
 	// Embedded structs with tag cfg:"name" are renamed with the given name.
 	TagID = "cfg"
+
+	// TagSepID is the struct tag name used to specify separators for slice or map struct fields.
+	// It is defined as a list of runes as follow:
+	//  - a map has 2 runes: one to identify the map items, the other to identify the key
+	//  - a slice has 1 rune to identify the slice items
+	//
+	// e.g. Field map[int][]int `...sep=" :,"..`
+	//  means map items are separated by a space, its key by a : and the slice items by a ,
+	//  so that `key1:123 key2:456` is deserialized as [key1:123 key2:456].
+	TagSepID = "sep"
 
 	// OptionSeparator is used to separate grouped options in command line flags.
 	// Options are grouped using an embedded struct that does not implement the Config interface.
@@ -82,6 +92,9 @@ type FromFlags interface {
 	// FlagsDoneConfig is called with the remaining arguments on the last subcommand
 	// once the flags have been processed.
 	FlagsDoneConfig(args []string) error
+
+	// FlagsShortConfig returns the short flag for the long name.
+	FlagsShortConfig(name string) string
 }
 
 // FromEnv defines the interface to set values from environment variables.
@@ -154,7 +167,7 @@ type config struct {
 }
 
 func newConfig(c Config) (*config, error) {
-	root, err := structs.NewStruct(c, TagID)
+	root, err := structs.NewStruct(c, TagID, TagSepID)
 	if err != nil {
 		return nil, err
 	}
