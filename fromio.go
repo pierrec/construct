@@ -7,7 +7,7 @@ import (
 	"github.com/pierrec/construct/internal/structs"
 )
 
-// Store defines the interface for retrieving options stored in
+// Store defines the interface for retrieving config items stored in
 // various data formats.
 //
 // Check the constructs package for implementations.
@@ -22,10 +22,10 @@ type Store interface {
 	Set(value interface{}, keys ...string) error
 	//TODO SetComments(string, ...string)
 
-	// Used when deserializing options.
+	// Used when deserializing config items.
 	io.ReaderFrom
 
-	// Used when serializing options.
+	// Used when serializing config items.
 	io.WriterTo
 
 	// StructTag returns the tag id used in struct field tags for the data format.

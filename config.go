@@ -26,25 +26,9 @@ const (
 	//  means map items are separated by a space, its key by a : and the slice items by a ,
 	//  so that `key1:123 key2:456` is deserialized as [key1:123 key2:456].
 	TagSepID = "sep"
-
-	// OptionSeparator is used to separate grouped options in command line flags.
-	// Options are grouped using an embedded struct that does not implement the Config interface.
-	// Embedded structs that do implement the Config interface are command line subcommands.
-	OptionSeparator = "-"
-
-	// SliceSeparator is used to separate slice items.
-	SliceSeparator = ','
-	sliceSeparator = string(SliceSeparator)
-
-	// MapKeySeparator is used to separate map keys and their value.
-	MapKeySeparator = ':'
-	mapKeySeparator = string(MapKeySeparator)
 )
 
 var (
-	// EnvSeparator is used to separate grouped options in environment variables.
-	EnvSeparator = "_"
-
 	// ErrUsageRequested is to be returned when the flags usage is requested.
 	ErrUsageRequested = errors.Errorf("flags usage requested")
 )
@@ -76,19 +60,15 @@ type Config interface {
 	// structs until an error is encountered.
 	InitConfig() error
 
-	// UsageConfig provides the usage message for the given option name.
+	// UsageConfig provides the usage message for the given config item name.
 	// If the name is the empty string, then the overall usage message is expected.
-	// If the returned value is empty, then the option or subcommand is considered hidden
+	// If the returned value is empty, then the config item or subcommand is considered hidden
 	// and not displayed in the flags usage message.
 	UsageConfig(name string) string
 }
 
 // FromFlags defines the interface to set values from command line flags.
 type FromFlags interface {
-	// FlagsUsageConfig returns the Writer for use when the usage is requested.
-	// If nil, it defaults to os.Stderr.
-	FlagsUsageConfig() io.Writer
-
 	// FlagsDoneConfig is called with the remaining arguments on the last subcommand
 	// once the flags have been processed.
 	FlagsDoneConfig(args []string) error
@@ -99,8 +79,8 @@ type FromFlags interface {
 
 // FromEnv defines the interface to set values from environment variables.
 type FromEnv interface {
-	// EnvConfig returns the name of the environment variable used for the given option.
-	// Return an empty value to ignore the option.
+	// EnvConfig returns the name of the environment variable used for the given config item.
+	// Return an empty value to ignore the config item.
 	EnvConfig(name string) string
 }
 
@@ -126,7 +106,7 @@ type FromIO interface {
 //  - env value: provided by the FromEnv interface
 //  - ini value: provided by the FromIO interface
 //  - default value: values initially set in config
-func Load(config Config) error {
+func Load(config Config, options ...Option) error {
 	args := os.Args[1:]
 	if flag.Parsed() {
 		// Arguments may have been parsed already, typically from go test binary.
@@ -137,11 +117,25 @@ func Load(config Config) error {
 
 // LoadArgs is equivalent to Load using the given arguments.
 // The first argument must be the real one, not the executable.
-func LoadArgs(config Config, args []string) error {
+func LoadArgs(config Config, args []string, options ...Option) error {
 	conf, err := newConfig(config)
 	if err != nil {
 		return err
 	}
+
+	for _, o := range options {
+		err := o(conf)
+		if err != nil {
+			return err
+		}
+	}
+	if conf.gsep == "" {
+		conf.gsep = "-"
+	}
+	if conf.envsep == "" {
+		conf.envsep = "_"
+	}
+
 	err = conf.Load(args)
 	if err == ErrUsageRequested && conf.fs != nil {
 		conf.fs.Usage()
@@ -164,6 +158,10 @@ type config struct {
 
 	fs   *flag.FlagSet
 	refs map[string]interface{} // Holds pointers of flags values.
+	out  io.Writer              // Output for usage message.
+	gsep string                 // Grouped config items separator.
+
+	envsep string // Environment variables separator.
 }
 
 func newConfig(c Config) (*config, error) {
@@ -190,16 +188,16 @@ func newConfigFromStruct(s *structs.StructStruct, c Config) *config {
 func (c *config) buildKeys(fields []*structs.StructField, section string) error {
 	for _, field := range fields {
 		if emb := field.Embedded(); emb != nil {
-			section := toSection(section, emb)
+			section := c.toSection(section, emb)
 			if err := c.buildKeys(emb.Fields(), section); err != nil {
 				return fmt.Errorf("%s: %v", field.Name(), err)
 			}
 			continue
 		}
-		name := toName(section, field)
+		name := c.toName(section, field)
 		lname := strings.ToLower(name)
 		if _, ok := c.trans[lname]; ok {
-			return fmt.Errorf("duplicate option name: %s", lname)
+			return fmt.Errorf("duplicate config name: %s", lname)
 		}
 		c.trans[lname] = name
 	}
@@ -270,7 +268,7 @@ func (c *config) Load(args []string) (err error) {
 			if !ok {
 				continue
 			}
-			names := c.fromNameAll(name, EnvSeparator)
+			names := c.fromNameAll(name, c.envsep)
 			field := c.root.Lookup(names...)
 
 			if err := field.Set(v); err != nil {
@@ -296,12 +294,12 @@ func (c *config) Load(args []string) (err error) {
 		}
 
 		if cio != nil {
-			// Merge the file data with the current options.
+			// Merge the file data with the current config items.
 			for _, name := range c.trans {
-				keys := c.fromNameAll(name, OptionSeparator)
+				keys := c.fromNameAll(name, c.gsep)
 				field := c.root.Lookup(keys...)
 				if !cio.Has(keys...) {
-					// Add the option to the store for saving.
+					// Add the config item to the store for saving.
 					v := field.Interface()
 					if err := cio.Set(v, keys...); err != nil {
 						return err
@@ -365,16 +363,16 @@ func callInitConfig(in []interface{}) bool {
 }
 
 // toName returns the field name.
-func toName(section string, f *structs.StructField) string {
+func (c *config) toName(section string, f *structs.StructField) string {
 	name := f.Name()
 	if section == "" {
 		return name
 	}
-	return section + OptionSeparator + name
+	return section + c.gsep + name
 }
 
 // toSection returns the section name.
-func toSection(section string, s *structs.StructStruct) string {
+func (c *config) toSection(section string, s *structs.StructStruct) string {
 	if s.Inlined() {
 		return section
 	}
@@ -382,7 +380,7 @@ func toSection(section string, s *structs.StructStruct) string {
 	if section == "" {
 		return name
 	}
-	return section + OptionSeparator + name
+	return section + c.gsep + name
 }
 
 // callUntil recursively calls the given method m with arguments args

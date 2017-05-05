@@ -35,14 +35,14 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 		}
 
 		if emb := field.Embedded(); emb != nil {
-			section := toSection(section, emb)
+			section := c.toSection(section, emb)
 			err := c.buildFlags(section, emb)
 			if err != nil {
 				return err
 			}
 			continue
 		}
-		name := toName(section, field)
+		name := c.toName(section, field)
 
 		// Convert lower types.
 		v, err := field.MarshalValue()
@@ -83,8 +83,7 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 	// Lazily set the usage message.
 	c.fs.Usage = func() {
 		usage := c.buildFlagsUsage()
-		out := c.raw.(FromFlags).FlagsUsageConfig()
-		usage(out)
+		usage(c.out)
 	}
 
 	return nil
@@ -184,7 +183,7 @@ func (c *config) updateFlags() (err error) {
 		if err != nil {
 			return
 		}
-		names := c.fromNameAll(f.Name, OptionSeparator)
+		names := c.fromNameAll(f.Name, c.gsep)
 		field := c.root.Lookup(names...)
 
 		// Cached references are pointers to the flag set value.

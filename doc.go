@@ -11,8 +11,8 @@
 // A struct has its fields populated by calling the Load() function.
 // The rules to populate the struct fields are as follow:
 //  - fields are only processed if they are exported
-//  - a field represents an option for the Config
-//  - an embedded type implementing the Config interface is used to group options logically
+//  - a field represents a config item for the Config
+//  - an embedded type implementing the Config interface is used to group config items logically
 //  - an embedded type implementing the Config and FromFlags interfaces represents a subcommand
 //  - fields processing can be modified using field tags with the following format
 //
@@ -24,8 +24,8 @@
 // The following struct tag flags are currently supported:
 //
 //     inline       Inline the field which must be a struct, instead of
-//                  processing it as a group of options. Inlined fields must
-//                  not collide with the outer struct ones.
+//                  processing it as a group of config items. Inlined fields
+//					must not collide with the outer struct ones.
 //                  It has no effect on non embedded types.
 //
 // Subcommands
@@ -53,6 +53,4 @@
 //
 // TODO
 //  - support comments in config files
-//  - expand variables? (cf yaml)
-//  - option to change any separator
 package construct
