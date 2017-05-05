@@ -24,9 +24,9 @@ type ConfigFile struct {
 	Save bool `ini:"-" toml:"-" json:"-" yaml:"-"`
 }
 
-func (*ConfigFile) InitConfig() error { return nil }
+func (*ConfigFile) Init() error { return nil }
 
-func (c *ConfigFile) UsageConfig(name string) string {
+func (c *ConfigFile) Usage(name string) string {
 	switch name {
 	case "Name":
 		return "Config file name (default=stdout)."
@@ -38,7 +38,7 @@ func (c *ConfigFile) UsageConfig(name string) string {
 	return ""
 }
 
-func (c *ConfigFile) LoadConfig() (io.ReadCloser, error) {
+func (c *ConfigFile) Load() (io.ReadCloser, error) {
 	if c.Name == "" {
 		return nil, nil
 	}
@@ -52,7 +52,7 @@ func (c *ConfigFile) LoadConfig() (io.ReadCloser, error) {
 	return f, nil
 }
 
-func (c *ConfigFile) WriteConfig() (io.WriteCloser, error) {
+func (c *ConfigFile) Write() (io.WriteCloser, error) {
 	if !c.Save {
 		return nil, nil
 	}

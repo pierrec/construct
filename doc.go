@@ -1,5 +1,5 @@
-// Package construct provides a simple way to load configuration into a struct,
-// from multiple sources, by relying on embedded types and interfaces defined on those.
+// Package construct provides a simple way to load configuration into a struct
+// from multiple sources, by relying on its embedded types and interfaces.
 //
 // The goal is to reduce the code boilerplate used to initialize data structures to
 // a minimum, by leveraging Go's types syntax definitions, interface methods, types
@@ -25,32 +25,36 @@
 //
 //     inline       Inline the field which must be a struct, instead of
 //                  processing it as a group of config items. Inlined fields
-//					must not collide with the outer struct ones.
+//                  must not collide with the outer struct ones.
 //                  It has no effect on non embedded types.
 //
 // Subcommands
 //
-// Subcommands in command line flags is supported and defined by embedding a struct
-// implementing both the Config and FromFlags interfaces. The FlagsDoneConfig() method
-// is invoked on the last subcommand with the remaining command line arguments.
+// Subcommands in command line flags are defined by embedding a struct
+// implementing both the Config and FromFlags interfaces.
+//
+// The FlagsDone() method is invoked on the last subcommand with
+// the remaining command line arguments.
 //
 // Sources
 //
-// Data used to populate structs can be fetched from various sources in order of priority,
-// overriding the struct instance (default) values:
-//  - command line flags
-//  - environment variables
+// Data used to populate structs can be fetched from various sources to override
+// the current struct instance values in the following order:
 //  - file in various formats
+//  - environment variables
+//  - command line flags
 //
 // The data sources are defined by implementing the relevant interfaces on the struct:
 //  - FromFlags interface for command line flags
 //  - FromEnv interface for environment variables
 //  - FromIO interface for io sources
 //
-// Once the data is loaded from all sources, the InitConfig() method is invoked
+// Once the data is loaded from all sources, the Init() method is invoked
 // on the main struct as well as all the embedded ones except subcommands that have
 // not been requested.
 //
 // TODO
+//
+// Missing features:
 //  - support comments in config files
 package construct

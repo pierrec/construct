@@ -3,7 +3,7 @@ package construct
 import (
 	"fmt"
 	"io"
-	"os"
+	"io/ioutil"
 	"reflect"
 	"strings"
 	"text/tabwriter"
@@ -13,9 +13,33 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
+// FlagsUsageError is returned upon any error generated when parsing command line options.
+type FlagsUsageError struct {
+	err   error
+	usage func(io.Writer) error
+}
+
+func (e *FlagsUsageError) Error() string {
+	if e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+// Raw returns the underlying error from FromFlags.
+// If the flags usage was requested, Raw() returns nil.
+func (e *FlagsUsageError) Raw() error { return e.err }
+
+// Usage writes the subcommand usage.
+func (e *FlagsUsageError) Usage(out io.Writer) error {
+	return e.usage(out)
+}
+
 func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 	if c.fs == nil {
 		c.fs = flag.NewFlagSet("", flag.ContinueOnError)
+		// Disable the output on error.
+		c.fs.SetOutput(ioutil.Discard)
 		// Make sure the parsing stops when a command is found.
 		c.fs.SetInterspersed(false)
 		c.refs = make(map[string]interface{})
@@ -50,10 +74,10 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 			return fmt.Errorf("field %s: %v", name, err)
 		}
 		lname := strings.ToLower(name)
-		usage := config.UsageConfig(field.Name())
+		usage := config.Usage(field.Name())
 		var short string
 		if isFlags {
-			short = from.FlagsShortConfig(field.Name())
+			short = from.FlagsShort(field.Name())
 			short = strings.ToLower(short)
 		}
 
@@ -80,12 +104,6 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 		c.refs[lname] = ref
 	}
 
-	// Lazily set the usage message.
-	c.fs.Usage = func() {
-		usage := c.buildFlagsUsage()
-		usage(c.out)
-	}
-
 	return nil
 }
 
@@ -104,12 +122,8 @@ func (c *config) buildFlagsUsage() func(io.Writer) error {
 	}
 
 	return func(out io.Writer) (err error) {
-		if out == nil {
-			out = os.Stderr
-		}
-
 		// Main usage.
-		if usage := c.raw.UsageConfig(""); usage != "" {
+		if usage := c.raw.Usage(""); usage != "" {
 			_, err = fmt.Fprintf(out, "%s\n\n", usage)
 			if err != nil {
 				return err
@@ -160,7 +174,7 @@ func (c *config) buildFlagsUsage() func(io.Writer) error {
 				return err
 			}
 			for _, sub := range subcommands {
-				usage := sub.c.UsageConfig("")
+				usage := sub.c.Usage("")
 				if usage == "" {
 					// Hidden command.
 					continue
@@ -183,7 +197,7 @@ func (c *config) updateFlags() (err error) {
 		if err != nil {
 			return
 		}
-		names := c.fromNameAll(f.Name, c.gsep)
+		names := c.fromNameAll(f.Name, c.options.gsep)
 		field := c.root.Lookup(names...)
 
 		// Cached references are pointers to the flag set value.

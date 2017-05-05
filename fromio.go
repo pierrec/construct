@@ -37,7 +37,7 @@ func ioLoad(from FromIO, lookup func(key ...string) []rune) (Store, error) {
 	if from == nil {
 		return nil, nil
 	}
-	src, err := from.LoadConfig()
+	src, err := from.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func ioLoad(from FromIO, lookup func(key ...string) []rune) (Store, error) {
 }
 
 func (c *config) ioSave(store Store, from FromIO, lookup func(key ...string) []rune) error {
-	dest, err := from.WriteConfig()
+	dest, err := from.Write()
 	if err != nil || dest == nil {
 		return err
 	}

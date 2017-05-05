@@ -6,9 +6,13 @@ import (
 	"log"
 	"os"
 
+	"github.com/pierrec/construct"
+
 	"comail.io/go/colog"
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
+
+var _ construct.Config = (*ConfigLog)(nil)
 
 // ConfigLog provides the options for the logging facility.
 // The logger is based on CoLog (https://texlution.com/post/colog-prefix-based-logging-in-golang/).
@@ -32,8 +36,8 @@ var ConfigLogDefault = ConfigLog{
 	LocalTime:  true,
 }
 
-// InitConfig makes ConfigLog implement Config.
-func (lg *ConfigLog) InitConfig() error {
+// Init makes ConfigLog implement Config.
+func (lg *ConfigLog) Init() error {
 	lvl, err := colog.ParseLevel(lg.Level)
 	if err != nil {
 		return err
@@ -64,8 +68,8 @@ func (lg *ConfigLog) InitConfig() error {
 	return nil
 }
 
-// UsageConfig makes ConfigLog implement Config.
-func (lg *ConfigLog) UsageConfig(name string) string {
+// Usage makes ConfigLog implement Config.
+func (lg *ConfigLog) Usage(name string) string {
 	switch name {
 	case "Filename":
 		return "file to write logs to (default=stderr)"

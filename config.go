@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/pierrec/construct/internal/structs"
-	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
 )
 
@@ -22,30 +21,11 @@ const (
 	//  - a map has 2 runes: one to identify the map items, the other to identify the key
 	//  - a slice has 1 rune to identify the slice items
 	//
-	// e.g. Field map[int][]int `...sep=" :,"..`
+	// e.g. Field map[int][]string `...sep=" :,"...`
 	//  means map items are separated by a space, its key by a : and the slice items by a ,
-	//  so that `key1:123 key2:456` is deserialized as [key1:123 key2:456].
+	//  so that `key1:a,b key2:x,y` is deserialized as [key1:["a","b"] key2:["x","y"]].
 	TagSepID = "sep"
 )
-
-var (
-	// ErrUsageRequested is to be returned when the flags usage is requested.
-	ErrUsageRequested = errors.Errorf("flags usage requested")
-)
-
-// Help requested on the cli.
-// If set to true, it will prevent the InitConfig methods from being triggered.
-var helpRequested bool
-
-func init() {
-	for _, s := range os.Args {
-		switch s {
-		case "-h", "-help", "--help":
-			helpRequested = true
-			break
-		}
-	}
-}
 
 // Config defines the main interface for a config struct.
 // Any embedded struct is processed specifically depending on the interfaces it implements:
@@ -58,42 +38,42 @@ type Config interface {
 	// Init initializes the Config struct.
 	// It is automatically invoked on Config and recursively on its non subcommand embedded
 	// structs until an error is encountered.
-	InitConfig() error
+	Init() error
 
-	// UsageConfig provides the usage message for the given config item name.
+	// Usage provides the usage message for the given config item name.
 	// If the name is the empty string, then the overall usage message is expected.
 	// If the returned value is empty, then the config item or subcommand is considered hidden
 	// and not displayed in the flags usage message.
-	UsageConfig(name string) string
+	Usage(name string) string
 }
 
 // FromFlags defines the interface to set values from command line flags.
 type FromFlags interface {
-	// FlagsDoneConfig is called with the remaining arguments on the last subcommand
+	// FlagsDone is called with the remaining arguments on the last subcommand
 	// once the flags have been processed.
-	FlagsDoneConfig(args []string) error
+	FlagsDone(args []string) error
 
-	// FlagsShortConfig returns the short flag for the long name.
-	FlagsShortConfig(name string) string
+	// FlagsShort returns the short flag for the long name.
+	FlagsShort(name string) string
 }
 
 // FromEnv defines the interface to set values from environment variables.
 type FromEnv interface {
-	// EnvConfig returns the name of the environment variable used for the given config item.
+	// Env returns the name of the environment variable used for the given config item.
 	// Return an empty value to ignore the config item.
-	EnvConfig(name string) string
+	Env(name string) string
 }
 
 // FromIO defines the interface to set values from an io source (typically a file).
 // The supported formats are currently: ini, toml, json and yaml.
 type FromIO interface {
-	// LoadConfig returns the source for the data.
-	LoadConfig() (io.ReadCloser, error)
+	// Load returns the source for the data.
+	Load() (io.ReadCloser, error)
 
-	// WriteConfig returns the destination for the data.
-	WriteConfig() (io.WriteCloser, error)
+	// Write returns the destination for the data.
+	Write() (io.WriteCloser, error)
 
-	// New returns a new instance of ConfigIO.
+	// New returns a new instance of Store.
 	New(seps func(key ...string) []rune) Store
 }
 
@@ -118,34 +98,25 @@ func Load(config Config, options ...Option) error {
 // LoadArgs is equivalent to Load using the given arguments.
 // The first argument must be the real one, not the executable.
 func LoadArgs(config Config, args []string, options ...Option) error {
-	conf, err := newConfig(config)
+	conf, err := newConfig(config, options)
 	if err != nil {
 		return err
 	}
 
-	for _, o := range options {
-		err := o(conf)
-		if err != nil {
-			return err
+	for _, s := range args {
+		switch s {
+		case "-h", "-help", "--help":
+			conf.helpRequested = true
+			break
 		}
 	}
-	if conf.gsep == "" {
-		conf.gsep = "-"
-	}
-	if conf.envsep == "" {
-		conf.envsep = "_"
-	}
 
-	err = conf.Load(args)
-	if err == ErrUsageRequested && conf.fs != nil {
-		conf.fs.Usage()
-		return nil
-	}
-	return err
+	return conf.Load(args)
 }
 
 type config struct {
-	raw Config
+	helpRequested bool // If true, prevent the Init methods from being triggered.
+	raw           Config
 	// Internal reflect based representation of the struct to use as config.
 	root *structs.StructStruct
 	// Initially contains all the stringified keys of root.
@@ -158,30 +129,57 @@ type config struct {
 
 	fs   *flag.FlagSet
 	refs map[string]interface{} // Holds pointers of flags values.
-	out  io.Writer              // Output for usage message.
-	gsep string                 // Grouped config items separator.
 
-	envsep string // Environment variables separator.
+	options struct {
+		fout   io.Writer                               // Flags usage output.
+		gsep   string                                  // Grouped config items separator.
+		envsep string                                  // Environment variables separator.
+		fusage func(*FlagsUsageError, io.Writer) error // Called upon flags parsing error.
+	}
 }
 
-func newConfig(c Config) (*config, error) {
+func newConfig(c Config, options []Option) (*config, error) {
 	root, err := structs.NewStruct(c, TagID, TagSepID)
 	if err != nil {
 		return nil, err
 	}
-	return &config{
-		raw:   c,
-		root:  root,
-		trans: make(map[string]string),
-	}, nil
+	conf := newConfigFromStruct(root, c, nil)
+
+	// User defined options.
+	for _, o := range options {
+		err := o(conf)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Default options.
+	if conf.options.fout == nil {
+		conf.options.fout = os.Stderr
+	}
+	if conf.options.gsep == "" {
+		conf.options.gsep = "-"
+	}
+	if conf.options.envsep == "" {
+		conf.options.envsep = "_"
+	}
+	if conf.options.fusage == nil {
+		conf.options.fusage = defaultFlagsUsage
+	}
+
+	return conf, nil
 }
 
-func newConfigFromStruct(s *structs.StructStruct, c Config) *config {
-	return &config{
+func newConfigFromStruct(s *structs.StructStruct, c Config, conf *config) *config {
+	nconf := &config{
 		raw:   c,
 		root:  s,
 		trans: make(map[string]string),
 	}
+	if conf != nil {
+		nconf.options = conf.options
+	}
+	return nconf
 }
 
 // Build the mapping of flags normalized names with their real names.
@@ -215,12 +213,19 @@ func (c *config) Load(args []string) (err error) {
 		if err := c.buildFlags("", c.root); err != nil {
 			return err
 		}
+		defer func() {
+			if err != nil {
+				return
+			}
+			err = from.FlagsDone(args)
+		}()
 
 		if err := c.fs.Parse(args); err != nil {
 			if err == flag.ErrHelp {
-				os.Exit(0)
+				err = nil
 			}
-			return err
+			ferr := &FlagsUsageError{err, c.buildFlagsUsage()}
+			return c.options.fusage(ferr, c.options.fout)
 		}
 
 		if err := c.updateFlags(); err != nil {
@@ -233,34 +238,32 @@ func (c *config) Load(args []string) (err error) {
 				return
 			}
 			args := c.fs.Args()
-			if len(args) > 0 {
-				// Maybe a new subcommand.
-				sub := strings.ToLower(args[0])
-				field := c.root.Lookup(sub)
-				if field == nil {
-					goto flagsDone
-				}
-				emb := field.Embedded()
-				if emb == nil {
-					goto flagsDone
-				}
-				// A subcommand must be a Config and Flags.
-				conf, okc := emb.Interface().(Config)
-				_, okf := emb.Interface().(FromFlags)
-				if okc && okf {
-					err = newConfigFromStruct(emb, conf).Load(args[1:])
-					return
-				}
+			if len(args) == 0 {
+				return
 			}
-		flagsDone:
-			err = from.FlagsDoneConfig(args)
+			// Maybe a new subcommand.
+			sub := strings.ToLower(args[0])
+			field := c.root.Lookup(sub)
+			if field == nil {
+				return
+			}
+			emb := field.Embedded()
+			if emb == nil {
+				return
+			}
+			// A subcommand must be a Config and Flags.
+			conf, okc := emb.Interface().(Config)
+			_, okf := emb.Interface().(FromFlags)
+			if okc && okf {
+				err = newConfigFromStruct(emb, conf, c).Load(args[1:])
+			}
 		}()
 	}
 
 	if from, ok := c.raw.(FromEnv); ok {
 		// Update the config with the env values.
 		for _, name := range c.trans {
-			envvar := from.EnvConfig(name)
+			envvar := from.Env(name)
 			if envvar == "" {
 				continue
 			}
@@ -268,7 +271,7 @@ func (c *config) Load(args []string) (err error) {
 			if !ok {
 				continue
 			}
-			names := c.fromNameAll(name, c.envsep)
+			names := c.fromNameAll(name, c.options.envsep)
 			field := c.root.Lookup(names...)
 
 			if err := field.Set(v); err != nil {
@@ -296,7 +299,7 @@ func (c *config) Load(args []string) (err error) {
 		if cio != nil {
 			// Merge the file data with the current config items.
 			for _, name := range c.trans {
-				keys := c.fromNameAll(name, c.gsep)
+				keys := c.fromNameAll(name, c.options.gsep)
 				field := c.root.Lookup(keys...)
 				if !cio.Has(keys...) {
 					// Add the config item to the store for saving.
@@ -339,24 +342,24 @@ func (c *config) fromNameAll(name string, sep string) []string {
 	return strings.Split(c.trans[name], sep)
 }
 
-// init invokes the InitConfig method recursively on the main type
+// init invokes the Init method recursively on the main type
 // and all the embedded ones. It stops at the first error encountered.
 func (c *config) init() error {
-	if helpRequested {
+	if c.helpRequested {
 		// Skip init if help is requested.
 		return nil
 	}
 
 	// Make sure to skip the embedded structs implementing Config (aka subcommands)
 	// as they only get initialized if the subcommand is actually invoked.
-	res, ok := callUntil(c.root, "InitConfig", nil, callInitConfig)
+	res, ok := callUntil(c.root, "Init", nil, callInitConfig)
 	if !ok {
 		return nil
 	}
 	return res[0].(error)
 }
 
-// callInitConfig detects an error returned by the InitConfig method.
+// callInitConfig detects an error returned by the Init method.
 func callInitConfig(in []interface{}) bool {
 	err, ok := in[0].(error)
 	return ok && err != nil
@@ -368,7 +371,7 @@ func (c *config) toName(section string, f *structs.StructField) string {
 	if section == "" {
 		return name
 	}
-	return section + c.gsep + name
+	return section + c.options.gsep + name
 }
 
 // toSection returns the section name.
@@ -380,7 +383,7 @@ func (c *config) toSection(section string, s *structs.StructStruct) string {
 	if section == "" {
 		return name
 	}
-	return section + c.gsep + name
+	return section + c.options.gsep + name
 }
 
 // callUntil recursively calls the given method m with arguments args
