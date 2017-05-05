@@ -17,15 +17,16 @@ type ConfigFileINI struct {
 
 var _ construct.FromIO = (*ConfigFileINI)(nil)
 
-func (c *ConfigFileINI) New() construct.Store {
+func (c *ConfigFileINI) New(lookup func(key ...string) []rune) construct.Store {
 	v, _ := ini.New(ini.Comment("# "))
-	return &iniStore{v}
+	return &iniStore{lookup, v}
 }
 
 var _ construct.Store = (*iniStore)(nil)
 
 // iniStore wraps an ini.INI instance to implement the construct.ConfigIO interface.
 type iniStore struct {
+	lookup func(key ...string) []rune
 	*ini.INI
 }
 
@@ -53,7 +54,8 @@ func (store *iniStore) Get(keys ...string) (interface{}, error) {
 
 func (store *iniStore) Set(v interface{}, keys ...string) error {
 	section, key := store.keys(keys)
-	mv, err := structs.MarshalValue(v, nil)
+	seps := store.lookup(keys...)
+	mv, err := structs.MarshalValue(v, seps)
 	if err != nil {
 		return err
 	}

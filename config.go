@@ -114,7 +114,7 @@ type FromIO interface {
 	WriteConfig() (io.WriteCloser, error)
 
 	// New returns a new instance of ConfigIO.
-	New() Store
+	New(seps func(key ...string) []rune) Store
 }
 
 // Load populates the config with data from various sources.
@@ -282,7 +282,15 @@ func (c *config) Load(args []string) (err error) {
 
 	if from, ok := c.raw.(FromIO); ok {
 		// Load the values from the ini source.
-		cio, err := ioLoad(from)
+		lookup := func(keys ...string) []rune {
+			field := c.root.Lookup(keys...)
+			if field == nil {
+				return nil
+			}
+			return field.Separators()
+		}
+
+		cio, err := ioLoad(from, lookup)
 		if err != nil {
 			return err
 		}
@@ -305,13 +313,21 @@ func (c *config) Load(args []string) (err error) {
 					return fmt.Errorf("%s: %v", name, err)
 				}
 
+				if v != nil {
+					// Convert the value to make sure it can be Set properly.
+					v, err = structs.MarshalValue(v, field.Separators())
+					if err != nil {
+						return fmt.Errorf("%s: %v", name, err)
+					}
+				}
+
 				if err := field.Set(v); err != nil {
 					return err
 				}
 			}
 		}
 
-		if err := c.ioSave(cio, from); err != nil {
+		if err := c.ioSave(cio, from, lookup); err != nil {
 			return err
 		}
 	}

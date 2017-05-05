@@ -116,6 +116,11 @@ func (f *StructField) Tag() reflect.StructTag {
 	return f.tag
 }
 
+// Separators returns the field separators.
+func (f *StructField) Separators() []rune {
+	return f.seps
+}
+
 // MarshalValue returns the field value marshaled by MarshalValue().
 func (f *StructField) MarshalValue() (interface{}, error) {
 	return MarshalValue(f.Interface(), f.seps)

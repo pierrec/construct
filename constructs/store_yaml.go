@@ -19,16 +19,17 @@ type ConfigFileYAML struct {
 
 var _ construct.FromIO = (*ConfigFileYAML)(nil)
 
-func (c *ConfigFileYAML) New() construct.Store {
+func (c *ConfigFileYAML) New(lookup func(key ...string) []rune) construct.Store {
 	m := make(map[string]interface{})
-	return &yamlStore{m}
+	return &yamlStore{lookup, m}
 }
 
 var _ construct.Store = (*yamlStore)(nil)
 
 // yamlStore wraps json instances to implement the construct.ConfigIO interface.
 type yamlStore struct {
-	data map[string]interface{}
+	lookup func(key ...string) []rune
+	data   map[string]interface{}
 }
 
 func (store *yamlStore) StructTag() string { return "json" }
@@ -76,7 +77,7 @@ func (store *yamlStore) Set(v interface{}, keys ...string) error {
 		return nil
 	}
 	v, err := store.marshal(keys, v)
-	if err != nil {
+	if err != nil || v == nil {
 		return err
 	}
 	return store.set(store.data, v, keys)
@@ -93,7 +94,8 @@ func (store *yamlStore) marshal(keys []string, v interface{}) (interface{}, erro
 	case time.Time, time.Duration:
 		return structs.MarshalValue(v, nil)
 	default:
-		return marshal(store, store.marshal, keys, v)
+		seps := store.lookup(keys...)
+		return marshal(store, store.marshal, keys, v, seps)
 	}
 	return v, nil
 }

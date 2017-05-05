@@ -6,7 +6,6 @@ import (
 
 	toml "github.com/pelletier/go-toml"
 	"github.com/pierrec/construct"
-	"github.com/pierrec/construct/internal/structs"
 )
 
 var _ construct.Config = (*ConfigFileTOML)(nil)
@@ -18,16 +17,17 @@ type ConfigFileTOML struct {
 
 var _ construct.FromIO = (*ConfigFileTOML)(nil)
 
-func (c *ConfigFileTOML) New() construct.Store {
+func (c *ConfigFileTOML) New(lookup func(key ...string) []rune) construct.Store {
 	v, _ := toml.Load("")
-	return &tomlStore{v}
+	return &tomlStore{lookup, v}
 }
 
 var _ construct.Store = (*tomlStore)(nil)
 
 // tomlStore wraps an toml.Toml instance to implement the construct.ConfigIO interface.
 type tomlStore struct {
-	toml *toml.TomlTree
+	lookup func(key ...string) []rune
+	toml   *toml.TomlTree
 }
 
 func (store *tomlStore) StructTag() string { return "toml" }
@@ -41,11 +41,7 @@ func (store *tomlStore) Get(keys ...string) (interface{}, error) {
 	switch w := v.(type) {
 	case int64, float64, string, bool, time.Time:
 	case *toml.TomlTree:
-		m := w.ToMap()
-		return structs.MarshalValue(m, nil)
-	default:
-		// Convert the value to make sure it can be Set properly.
-		return structs.MarshalValue(v, nil)
+		return w.ToMap(), nil
 	}
 	return v, nil
 }
@@ -91,7 +87,8 @@ func (store *tomlStore) marshal(keys []string, v interface{}) (interface{}, erro
 	case float32:
 		v = float64(w)
 	default:
-		return marshal(store, store.marshal, keys, v)
+		seps := store.lookup(keys...)
+		return marshal(store, store.marshal, keys, v, seps)
 	}
 	return v, nil
 }

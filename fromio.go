@@ -33,7 +33,7 @@ type Store interface {
 	StructTag() string
 }
 
-func ioLoad(from FromIO) (Store, error) {
+func ioLoad(from FromIO, lookup func(key ...string) []rune) (Store, error) {
 	if from == nil {
 		return nil, nil
 	}
@@ -46,21 +46,21 @@ func ioLoad(from FromIO) (Store, error) {
 	}
 	defer src.Close()
 
-	store := from.New()
+	store := from.New(lookup)
 	if _, err := store.ReadFrom(src); err != nil {
 		return nil, err
 	}
 	return store, nil
 }
 
-func (c *config) ioSave(store Store, from FromIO) error {
+func (c *config) ioSave(store Store, from FromIO, lookup func(key ...string) []rune) error {
 	dest, err := from.WriteConfig()
 	if err != nil || dest == nil {
 		return err
 	}
 	defer dest.Close()
 	if store == nil {
-		store = from.New()
+		store = from.New(lookup)
 	}
 	if err := ioEncode(store, nil, c.root); err != nil {
 		return err

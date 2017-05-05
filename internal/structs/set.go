@@ -15,6 +15,9 @@ func Set(value reflect.Value, v interface{}, seps []rune) error {
 
 	switch v := v.(type) {
 	case nil:
+		// Reset the value.
+		zero := reflect.Zero(value.Type())
+		value.Set(zero)
 		return nil
 	case string:
 		return UnmarshalValue(value, v, seps)

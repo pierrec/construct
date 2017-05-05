@@ -8,8 +8,10 @@ import (
 	"github.com/pierrec/construct/internal/structs"
 )
 
+// marshal makes sure the given value v is suitable for storage.
+// It may update the Store directly in which case the returned value is nil.
 func marshal(store construct.Store, marshal func([]string, interface{}) (interface{}, error),
-	keys []string, v interface{}) (interface{}, error) {
+	keys []string, v interface{}, seps []rune) (interface{}, error) {
 	switch t := reflect.TypeOf(v); t.Kind() {
 	case reflect.Slice, reflect.Array:
 		value := reflect.ValueOf(v)
@@ -43,7 +45,7 @@ func marshal(store construct.Store, marshal func([]string, interface{}) (interfa
 		return nil, err
 
 	default:
-		mv, err := structs.MarshalValue(v, nil)
+		mv, err := structs.MarshalValue(v, seps)
 		if err != nil {
 			return nil, err
 		}
@@ -52,7 +54,7 @@ func marshal(store construct.Store, marshal func([]string, interface{}) (interfa
 	return v, nil
 }
 
-// marshalMap makes use of TOML tables by setting them with the map keys.
+// marshalMap populates the store with the map keys and marshaled values.
 // v must be a valid go map.
 func marshalMap(store construct.Store, marshal func([]string, interface{}) (interface{}, error),
 	keys []string, v interface{}) error {
@@ -60,7 +62,8 @@ func marshalMap(store construct.Store, marshal func([]string, interface{}) (inte
 	n := value.Len()
 	if n == 0 {
 		// Empty map, just keep the key.
-		store.Set(nil, keys...)
+		zero := reflect.Zero(value.Type().Elem())
+		store.Set(zero, keys...)
 		return nil
 	}
 	mkeys := value.MapKeys()
@@ -96,15 +99,15 @@ func unmarshalMap(data map[string]interface{}) error {
 }
 
 func unmarshal(v interface{}) (interface{}, error) {
-	var err error
 	switch w := v.(type) {
 	case map[string]interface{}:
-		err = unmarshalMap(w)
+		err := unmarshalMap(w)
+		return v, err
 	case []interface{}:
 		if len(w) == 0 {
 			return "", nil
 		}
-		v, err = structs.MarshalValue(v, nil)
+		return structs.MarshalValue(v, nil)
 	}
-	return v, err
+	return v, nil
 }

@@ -18,16 +18,17 @@ type ConfigFileJSON struct {
 
 var _ construct.FromIO = (*ConfigFileJSON)(nil)
 
-func (c *ConfigFileJSON) New() construct.Store {
+func (c *ConfigFileJSON) New(lookup func(key ...string) []rune) construct.Store {
 	m := make(map[string]interface{})
-	return &jsonStore{m}
+	return &jsonStore{lookup, m}
 }
 
 var _ construct.Store = (*jsonStore)(nil)
 
 // jsonStore wraps json instances to implement the construct.ConfigIO interface.
 type jsonStore struct {
-	data map[string]interface{}
+	lookup func(key ...string) []rune
+	data   map[string]interface{}
 }
 
 func (store *jsonStore) StructTag() string { return "json" }
@@ -75,7 +76,7 @@ func (store *jsonStore) Set(v interface{}, keys ...string) error {
 		return nil
 	}
 	v, err := store.marshal(keys, v)
-	if err != nil {
+	if err != nil || v == nil {
 		return err
 	}
 	return store.set(store.data, v, keys)
@@ -96,7 +97,8 @@ func (store *jsonStore) marshal(keys []string, v interface{}) (interface{}, erro
 	case time.Time, time.Duration:
 		return structs.MarshalValue(v, nil)
 	default:
-		return marshal(store, store.marshal, keys, v)
+		seps := store.lookup(keys...)
+		return marshal(store, store.marshal, keys, v, seps)
 	}
 	return v, nil
 }
