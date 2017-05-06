@@ -17,6 +17,7 @@ type ConfigFileTOML struct {
 
 var _ construct.FromIO = (*ConfigFileTOML)(nil)
 
+// New returns the Store for a TOML formatted file.
 func (c *ConfigFileTOML) New(lookup func(key ...string) []rune) construct.Store {
 	v, _ := toml.Load("")
 	return &tomlStore{lookup, v}

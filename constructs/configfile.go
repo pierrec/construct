@@ -24,20 +24,23 @@ type ConfigFile struct {
 	Save bool `ini:"-" toml:"-" json:"-" yaml:"-"`
 }
 
+// Init initializes the ConfigFile.
 func (*ConfigFile) Init() error { return nil }
 
+// Usage returns the ConfigFile usage for each of its options.
 func (c *ConfigFile) Usage(name string) string {
 	switch name {
 	case "Name":
-		return "Config file name (default=stdout)."
+		return "Config file name (default=stdout)"
 	case "Save":
-		return "Save the config to file."
+		return "Save the config to file"
 	case "Backup":
-		return "Config file backup extension (default=" + c.Backup + ")."
+		return "Config file backup extension (default=" + c.Backup + ")"
 	}
 	return ""
 }
 
+// Load returns an io.ReadCloser if the Name is set and the file exists.
 func (c *ConfigFile) Load() (io.ReadCloser, error) {
 	if c.Name == "" {
 		return nil, nil
@@ -52,6 +55,10 @@ func (c *ConfigFile) Load() (io.ReadCloser, error) {
 	return f, nil
 }
 
+// Write returns an io.WriteCloser if the Save flag is set to true.
+// If the Name is empty, it defaults to stdout.
+// If the backup extension is set, the file is first renamed with it,
+// then a new one is created and returned.
 func (c *ConfigFile) Write() (io.WriteCloser, error) {
 	if !c.Save {
 		return nil, nil

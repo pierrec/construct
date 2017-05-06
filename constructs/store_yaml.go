@@ -19,6 +19,7 @@ type ConfigFileYAML struct {
 
 var _ construct.FromIO = (*ConfigFileYAML)(nil)
 
+// New returns the Store for a YAML formatted file.
 func (c *ConfigFileYAML) New(lookup func(key ...string) []rune) construct.Store {
 	m := make(map[string]interface{})
 	return &yamlStore{lookup, m}
