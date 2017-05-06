@@ -133,3 +133,7 @@ func (store *jsonStore) WriteTo(w io.Writer) (int64, error) {
 	}
 	return 0, nil
 }
+
+func (store *jsonStore) SetComment(comment string, keys ...string) error {
+	return nil
+}

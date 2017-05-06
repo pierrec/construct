@@ -114,3 +114,7 @@ func (store *tomlStore) ReadFrom(r io.Reader) (int64, error) {
 func (store *tomlStore) WriteTo(w io.Writer) (int64, error) {
 	return store.toml.WriteTo(w)
 }
+
+func (store *tomlStore) SetComment(comment string, keys ...string) error {
+	return nil
+}

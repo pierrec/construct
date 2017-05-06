@@ -136,3 +136,7 @@ func (store *yamlStore) WriteTo(w io.Writer) (int64, error) {
 	r := bytes.NewReader(bts)
 	return io.Copy(w, r)
 }
+
+func (store *yamlStore) SetComment(comment string, keys ...string) error {
+	return nil
+}

@@ -2,6 +2,7 @@ package constructs
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pierrec/construct"
 	"github.com/pierrec/construct/internal/structs"
@@ -61,5 +62,12 @@ func (store *iniStore) Set(v interface{}, keys ...string) error {
 	}
 	s := fmt.Sprintf("%v", mv)
 	store.INI.Set(section, key, s)
+	return nil
+}
+
+func (store *iniStore) SetComment(comment string, keys ...string) error {
+	section, key := store.keys(keys)
+	comment = strings.Replace(comment, "\n", "\n# ", -1)
+	store.INI.SetComments(section, key, comment)
 	return nil
 }
