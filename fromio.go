@@ -20,7 +20,9 @@ type Store interface {
 
 	// Set changes the value of the given key.
 	Set(value interface{}, keys ...string) error
-	//TODO SetComments(string, ...string)
+
+	// SetComment defines the comment for the given key.
+	SetComment(comment string, keys ...string) error
 
 	// Used when deserializing config items.
 	io.ReaderFrom
@@ -53,6 +55,14 @@ func ioLoad(from FromIO, lookup func(key ...string) []rune) (Store, error) {
 	return store, nil
 }
 
+func ioComment(conf Config, store Store, keys ...string) error {
+	name := keys[len(keys)-1]
+	if comment := conf.Usage(name); comment != "" {
+		return store.SetComment(comment, keys...)
+	}
+	return nil
+}
+
 func (c *config) ioSave(store Store, from FromIO, lookup func(key ...string) []rune) error {
 	dest, err := from.Write()
 	if err != nil || dest == nil {
@@ -62,7 +72,13 @@ func (c *config) ioSave(store Store, from FromIO, lookup func(key ...string) []r
 	if store == nil {
 		store = from.New(lookup)
 	}
-	if err := ioEncode(store, nil, c.root); err != nil {
+
+	// Global comment.
+	if err := ioComment(c.raw, store, "", ""); err != nil {
+		return err
+	}
+
+	if err := ioEncode(c.raw, store, nil, c.root); err != nil {
 		return err
 	}
 	_, err = store.WriteTo(dest)
@@ -71,7 +87,7 @@ func (c *config) ioSave(store Store, from FromIO, lookup func(key ...string) []r
 }
 
 // ioEncode encodes root into the Store storage format.
-func ioEncode(store Store, keys []string, root *structs.StructStruct) error {
+func ioEncode(conf Config, store Store, keys []string, root *structs.StructStruct) error {
 	tag := store.StructTag()
 
 	for _, field := range root.Fields() {
@@ -79,13 +95,19 @@ func ioEncode(store Store, keys []string, root *structs.StructStruct) error {
 			// Skip discarded fields.
 			continue
 		}
+		if c, _ := getCommand(field); c != nil {
+			// Do not save subcommands.
+			continue
+		}
 
-		ks := append(keys, field.Name())
+		key := field.Name()
+		ks := append(keys, key)
 		if emb := field.Embedded(); emb != nil {
 			if emb.Inlined() {
 				ks = ks[:len(ks)-1]
 			}
-			if err := ioEncode(store, ks, emb); err != nil {
+			conf := emb.Interface().(Config)
+			if err := ioEncode(conf, store, ks, emb); err != nil {
 				return err
 			}
 			continue
@@ -95,24 +117,48 @@ func ioEncode(store Store, keys []string, root *structs.StructStruct) error {
 		if err := store.Set(v, ks...); err != nil {
 			return fmt.Errorf("value %v: %v", v, err)
 		}
+
+		if err := ioComment(conf, store, ks...); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-//TODO func (c *config) iniAddComments(ini *ini.INI) {
-// 	ini.SetComments("", "", c.raw.UsageConfig(""))
+func (c *config) updateIO(store Store) error {
+	if store == nil {
+		return nil
+	}
 
-// 	for _, section := range append(ini.Sections(), "") {
-// 		if section != "" {
-// 			usage := c.usage(section)
-// 			ini.SetComments(section, "", usage)
-// 		}
+	for _, name := range c.trans {
+		keys := c.fromNameAll(name, c.options.gsep)
+		field := c.root.Lookup(keys...)
+		if !store.Has(keys...) {
+			// Add the config item to the store for saving.
+			v := field.Interface()
+			if err := store.Set(v, keys...); err != nil {
+				return err
+			}
 
-// 		for _, key := range ini.Keys(section) {
-// 			name := toName(section, key)
-// 			usage := c.usage(name)
-// 			ini.SetComments(section, key, usage)
-// 		}
-// 	}
-// }
+			continue
+		}
+		v, err := store.Get(keys...)
+		if err != nil {
+			return fmt.Errorf("%s: %v", name, err)
+		}
+
+		if v != nil {
+			// Convert the value to make sure it can be Set properly.
+			v, err = structs.MarshalValue(v, field.Separators())
+			if err != nil {
+				return fmt.Errorf("%s: %v", name, err)
+			}
+		}
+
+		if err := field.Set(v); err != nil {
+			return err
+		}
+	}
+	return nil
+}

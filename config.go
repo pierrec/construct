@@ -291,44 +291,17 @@ func (c *config) Load(args []string) (err error) {
 			return field.Separators()
 		}
 
-		cio, err := ioLoad(from, lookup)
+		store, err := ioLoad(from, lookup)
 		if err != nil {
 			return err
 		}
 
-		if cio != nil {
-			// Merge the file data with the current config items.
-			for _, name := range c.trans {
-				keys := c.fromNameAll(name, c.options.gsep)
-				field := c.root.Lookup(keys...)
-				if !cio.Has(keys...) {
-					// Add the config item to the store for saving.
-					v := field.Interface()
-					if err := cio.Set(v, keys...); err != nil {
-						return err
-					}
-					continue
-				}
-				v, err := cio.Get(keys...)
-				if err != nil {
-					return fmt.Errorf("%s: %v", name, err)
-				}
-
-				if v != nil {
-					// Convert the value to make sure it can be Set properly.
-					v, err = structs.MarshalValue(v, field.Separators())
-					if err != nil {
-						return fmt.Errorf("%s: %v", name, err)
-					}
-				}
-
-				if err := field.Set(v); err != nil {
-					return err
-				}
-			}
+		// Merge the file data with the current config items.
+		if err := c.updateIO(store); err != nil {
+			return err
 		}
 
-		if err := c.ioSave(cio, from, lookup); err != nil {
+		if err := c.ioSave(store, from, lookup); err != nil {
 			return err
 		}
 	}

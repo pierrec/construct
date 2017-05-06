@@ -53,8 +53,23 @@
 // on the main struct as well as all the embedded ones except subcommands that have
 // not been requested.
 //
+// Supported field types
+//
+// The following types, as well as slices and maps of them, are supported:
+//  - time.Duration, time.Time
+//  - *url.URL
+//  - *regexp.Regexp
+//  - *text/template.Template, *html/template.Template
+//  - *net.IPAddr, *net.IPNet
+//  - bool
+//  - string
+//  - float32, float64
+//  - int, int8, int16, int32, int64
+//  - uint, uint8, uint16, uint32, uint64
+//  - types implementing encoding.TextMarshaler and encoding.TextUnmarshaler
+//
 // TODO
 //
 // Missing features:
-//  - support comments in config files
+//  -
 package construct
