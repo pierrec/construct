@@ -18,11 +18,13 @@ const (
 
 	// TagSepID is the struct tag name used to specify separators for slice or map struct fields.
 	// It is defined as a list of runes as follow:
-	//  - a map has 2 runes: one to identify the map items, the other to identify the key
+	//  - a map has 2 runes: one to identify the map items, the other to identify the key within an item
 	//  - a slice has 1 rune to identify the slice items
 	//
-	// e.g. Field map[int][]string `...sep=" :,"...`
-	//  means map items are separated by a space, its key by a : and the slice items by a ,
+	// e.g. for a field is defined as
+	//      Field map[int][]string `...sep=" :,"...`
+	//
+	//  map items are separated by a space, its key by a : and the slice items by a ,
 	//  so that `key1:a,b key2:x,y` is deserialized as [key1:["a","b"] key2:["x","y"]].
 	TagSepID = "sep"
 )
@@ -70,11 +72,11 @@ type FromIO interface {
 	// Load returns the source for the data.
 	Load() (io.ReadCloser, error)
 
-	// Write returns the destination for the data.
-	Write() (io.WriteCloser, error)
+	// Save returns the destination for the data.
+	Save() (io.WriteCloser, error)
 
 	// New returns a new instance of Store.
-	New(seps func(key ...string) []rune) Store
+	New(seps LookupFn) Store
 }
 
 // Load populates the config with data from various sources.

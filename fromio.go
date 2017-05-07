@@ -7,6 +7,10 @@ import (
 	"github.com/pierrec/construct/internal/structs"
 )
 
+// LookupFn is the function signature used to return the runes used
+// for (de)serializing data on a given key.
+type LookupFn func(key ...string) []rune
+
 // Store defines the interface for retrieving config items stored in
 // various data formats.
 //
@@ -35,7 +39,7 @@ type Store interface {
 	StructTag() string
 }
 
-func ioLoad(from FromIO, lookup func(key ...string) []rune) (Store, error) {
+func ioLoad(from FromIO, LookupFn LookupFn) (Store, error) {
 	if from == nil {
 		return nil, nil
 	}
@@ -48,7 +52,7 @@ func ioLoad(from FromIO, lookup func(key ...string) []rune) (Store, error) {
 	}
 	defer src.Close()
 
-	store := from.New(lookup)
+	store := from.New(LookupFn)
 	if _, err := store.ReadFrom(src); err != nil {
 		return nil, err
 	}
@@ -63,14 +67,14 @@ func ioComment(conf Config, store Store, keys ...string) error {
 	return nil
 }
 
-func (c *config) ioSave(store Store, from FromIO, lookup func(key ...string) []rune) error {
-	dest, err := from.Write()
+func (c *config) ioSave(store Store, from FromIO, LookupFn LookupFn) error {
+	dest, err := from.Save()
 	if err != nil || dest == nil {
 		return err
 	}
 	defer dest.Close()
 	if store == nil {
-		store = from.New(lookup)
+		store = from.New(LookupFn)
 	}
 
 	// Global comment.
