@@ -213,11 +213,14 @@ func (s *StructStruct) Lookup(path ...string) *StructField {
 		if emb == nil {
 			continue
 		}
+		var field *StructField
 		if emb.Inlined() {
-			return emb.Lookup(path...)
+			field = emb.Lookup(path...)
+		} else if item.Name() == name {
+			field = emb.Lookup(path[1:]...)
 		}
-		if item.Name() == name {
-			return emb.Lookup(path[1:]...)
+		if field != nil {
+			return field
 		}
 	}
 	return nil
