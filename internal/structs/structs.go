@@ -289,11 +289,6 @@ func fieldsOf(v interface{}, tagid, septagid string) (res []*StructField, err er
 			continue
 		}
 		field := vType.Field(i)
-		if field.Type.Name() == "" {
-			// unnamed type: no methods can be defined, ignore.
-			continue
-		}
-
 		fname := field.Name
 
 		tag := field.Tag
@@ -330,6 +325,11 @@ func fieldsOf(v interface{}, tagid, septagid string) (res []*StructField, err er
 			// Unsupported field types.
 			continue
 		case reflect.Struct:
+			if field.Type.Name() == "" {
+				// unnamed type: no methods can be defined, ignore.
+				continue
+			}
+
 			if field.Anonymous {
 				// Embedded field: recursively descend into its fields.
 				v := value.Addr().Interface()
