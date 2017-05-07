@@ -20,8 +20,8 @@ type ConfigFile struct {
 	// The config file is first copied before being overwritten using this value.
 	// Leave empty to disable.
 	Backup string `ini:"-" toml:"-" json:"-" yaml:"-"`
-	// Save the config file once the whole config has been loaded.
-	Save bool `ini:"-" toml:"-" json:"-" yaml:"-"`
+	// ToSave the config file once the whole config has been loaded.
+	ToSave bool `cfg:"Save" ini:"-" toml:"-" json:"-" yaml:"-"`
 }
 
 // Init initializes the ConfigFile.
@@ -47,7 +47,7 @@ func (c *ConfigFile) Load() (io.ReadCloser, error) {
 	}
 	f, err := os.Open(c.Name)
 	if err != nil {
-		if os.IsNotExist(err) && c.Save {
+		if os.IsNotExist(err) && c.ToSave {
 			return nil, nil
 		}
 		return nil, err
@@ -55,12 +55,12 @@ func (c *ConfigFile) Load() (io.ReadCloser, error) {
 	return f, nil
 }
 
-// Write returns an io.WriteCloser if the Save flag is set to true.
+// Save returns an io.WriteCloser if the Save flag is set to true.
 // If the Name is empty, it defaults to stdout.
 // If the backup extension is set, the file is first renamed with it,
 // then a new one is created and returned.
-func (c *ConfigFile) Write() (io.WriteCloser, error) {
-	if !c.Save {
+func (c *ConfigFile) Save() (io.WriteCloser, error) {
+	if !c.ToSave {
 		return nil, nil
 	}
 

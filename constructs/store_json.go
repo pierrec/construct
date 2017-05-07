@@ -19,7 +19,12 @@ type ConfigFileJSON struct {
 var _ construct.FromIO = (*ConfigFileJSON)(nil)
 
 // New returns the Store for a JSON formatted file.
-func (c *ConfigFileJSON) New(lookup func(key ...string) []rune) construct.Store {
+func (c *ConfigFileJSON) New(lookup construct.LookupFn) construct.Store {
+	return NewStoreJSON(lookup)
+}
+
+// NewStoreJSON returns a Store based on the JSON format.
+func NewStoreJSON(lookup construct.LookupFn) construct.Store {
 	m := make(map[string]interface{})
 	return &jsonStore{lookup, m}
 }
@@ -28,7 +33,7 @@ var _ construct.Store = (*jsonStore)(nil)
 
 // jsonStore wraps json instances to implement the construct.ConfigIO interface.
 type jsonStore struct {
-	lookup func(key ...string) []rune
+	lookup construct.LookupFn
 	data   map[string]interface{}
 }
 

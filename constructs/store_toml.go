@@ -18,7 +18,12 @@ type ConfigFileTOML struct {
 var _ construct.FromIO = (*ConfigFileTOML)(nil)
 
 // New returns the Store for a TOML formatted file.
-func (c *ConfigFileTOML) New(lookup func(key ...string) []rune) construct.Store {
+func (c *ConfigFileTOML) New(lookup construct.LookupFn) construct.Store {
+	return NewStoreTOML(lookup)
+}
+
+// NewStoreTOML returns a Store based on the TOML format.
+func NewStoreTOML(lookup construct.LookupFn) construct.Store {
 	v, _ := toml.Load("")
 	return &tomlStore{lookup, v}
 }
@@ -27,7 +32,7 @@ var _ construct.Store = (*tomlStore)(nil)
 
 // tomlStore wraps an toml.Toml instance to implement the construct.ConfigIO interface.
 type tomlStore struct {
-	lookup func(key ...string) []rune
+	lookup construct.LookupFn
 	toml   *toml.TomlTree
 }
 

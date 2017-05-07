@@ -19,7 +19,12 @@ type ConfigFileINI struct {
 var _ construct.FromIO = (*ConfigFileINI)(nil)
 
 // New returns the Store for an INI formatted file.
-func (c *ConfigFileINI) New(lookup func(key ...string) []rune) construct.Store {
+func (c *ConfigFileINI) New(lookup construct.LookupFn) construct.Store {
+	return NewStoreINI(lookup)
+}
+
+// NewStoreINI returns a Store based on the INI format.
+func NewStoreINI(lookup construct.LookupFn) construct.Store {
 	v, _ := ini.New(ini.Comment("# "))
 	return &iniStore{lookup, v}
 }
@@ -28,7 +33,7 @@ var _ construct.Store = (*iniStore)(nil)
 
 // iniStore wraps an ini.INI instance to implement the construct.ConfigIO interface.
 type iniStore struct {
-	lookup func(key ...string) []rune
+	lookup construct.LookupFn
 	*ini.INI
 }
 

@@ -20,7 +20,12 @@ type ConfigFileYAML struct {
 var _ construct.FromIO = (*ConfigFileYAML)(nil)
 
 // New returns the Store for a YAML formatted file.
-func (c *ConfigFileYAML) New(lookup func(key ...string) []rune) construct.Store {
+func (c *ConfigFileYAML) New(lookup construct.LookupFn) construct.Store {
+	return NewStoreYAML(lookup)
+}
+
+// NewStoreYAML returns a Store based on the YAML format.
+func NewStoreYAML(lookup construct.LookupFn) construct.Store {
 	m := make(map[string]interface{})
 	return &yamlStore{lookup, m}
 }
@@ -29,7 +34,7 @@ var _ construct.Store = (*yamlStore)(nil)
 
 // yamlStore wraps json instances to implement the construct.ConfigIO interface.
 type yamlStore struct {
-	lookup func(key ...string) []rune
+	lookup construct.LookupFn
 	data   map[string]interface{}
 }
 

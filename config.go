@@ -51,9 +51,9 @@ type Config interface {
 
 // FromFlags defines the interface to set values from command line flags.
 type FromFlags interface {
-	// FlagsDone is called with the remaining arguments on the last subcommand
-	// once the flags have been processed.
-	FlagsDone(args []string) error
+	// FlagsDone is called once the flags have been processed
+	// with the previous subcommands and the remaining arguments.
+	FlagsDone(cmds []Config, args []string) error
 
 	// FlagsShort returns the short flag for the long name.
 	FlagsShort(name string) string
@@ -131,6 +131,7 @@ type config struct {
 
 	fs   *flag.FlagSet
 	refs map[string]interface{} // Holds pointers of flags values.
+	prev []Config               // Previous Config items.
 
 	options struct {
 		fout   io.Writer                               // Flags usage output.
@@ -180,6 +181,7 @@ func newConfigFromStruct(s *structs.StructStruct, c Config, conf *config) *confi
 	}
 	if conf != nil {
 		nconf.options = conf.options
+		nconf.prev = append(conf.prev, conf.raw)
 	}
 	return nconf
 }
@@ -215,11 +217,13 @@ func (c *config) Load(args []string) (err error) {
 		if err := c.buildFlags("", c.root); err != nil {
 			return err
 		}
+		// Prepare for the callback on the last command only.
+		lastCommand := true
 		defer func() {
-			if err != nil {
+			if err != nil || !lastCommand {
 				return
 			}
-			err = from.FlagsDone(args)
+			err = from.FlagsDone(c.prev, c.fs.Args())
 		}()
 
 		if err := c.fs.Parse(args); err != nil {
@@ -244,7 +248,7 @@ func (c *config) Load(args []string) (err error) {
 				return
 			}
 			// Maybe a new subcommand.
-			sub := strings.ToLower(args[0])
+			sub := args[0]
 			field := c.root.Lookup(sub)
 			if field == nil {
 				return
@@ -257,6 +261,7 @@ func (c *config) Load(args []string) (err error) {
 			conf, okc := emb.Interface().(Config)
 			_, okf := emb.Interface().(FromFlags)
 			if okc && okf {
+				lastCommand = false
 				err = newConfigFromStruct(emb, conf, c).Load(args[1:])
 			}
 		}()
