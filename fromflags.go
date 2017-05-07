@@ -13,28 +13,6 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
-// FlagsUsageError is returned upon any error generated when parsing command line options.
-type FlagsUsageError struct {
-	err   error
-	usage func(io.Writer) error
-}
-
-func (e *FlagsUsageError) Error() string {
-	if e.err == nil {
-		return ""
-	}
-	return e.err.Error()
-}
-
-// Raw returns the underlying error from FromFlags.
-// If the flags usage was requested, Raw() returns nil.
-func (e *FlagsUsageError) Raw() error { return e.err }
-
-// Usage writes the subcommand usage.
-func (e *FlagsUsageError) Usage(out io.Writer) error {
-	return e.usage(out)
-}
-
 func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 	if c.fs == nil {
 		c.fs = flag.NewFlagSet("", flag.ContinueOnError)

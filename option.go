@@ -1,10 +1,6 @@
 package construct
 
-import (
-	"fmt"
-	"io"
-	"os"
-)
+import "io"
 
 // Option is used to customize the behaviour of construct.
 type Option func(*config) error
@@ -42,20 +38,10 @@ func OptionEnvSep(sep rune) Option {
 
 // OptionFlagsUsage defines the function to be called when an error is encountered
 // while parsing command line flags.
-func OptionFlagsUsage(usage func(*FlagsUsageError, io.Writer) error) Option {
+// The supplied error is nil if the help was requested.
+func OptionFlagsUsage(usage func(error, func(io.Writer) error) error) Option {
 	return func(c *config) error {
 		c.options.fusage = usage
 		return nil
 	}
-}
-
-// defaultFlagsUsage prints the error (if help was not requested) as well as
-// the corresponding usage message to the supplied io.Writer and exits.
-func defaultFlagsUsage(err *FlagsUsageError, out io.Writer) error {
-	if e := err.Raw(); e != nil {
-		fmt.Fprintln(out, e)
-	}
-	err.Usage(out)
-	os.Exit(2)
-	return nil
 }

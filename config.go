@@ -134,10 +134,10 @@ type config struct {
 	prev []Config               // Previous Config items.
 
 	options struct {
-		fout   io.Writer                               // Flags usage output.
-		gsep   string                                  // Grouped config items separator.
-		envsep string                                  // Environment variables separator.
-		fusage func(*FlagsUsageError, io.Writer) error // Called upon flags parsing error.
+		fout   io.Writer                                // Flags usage output.
+		gsep   string                                   // Grouped config items separator.
+		envsep string                                   // Environment variables separator.
+		fusage func(error, func(io.Writer) error) error // Called upon flags parsing error or help requested.
 	}
 }
 
@@ -167,7 +167,15 @@ func newConfig(c Config, options []Option) (*config, error) {
 		conf.options.envsep = "_"
 	}
 	if conf.options.fusage == nil {
-		conf.options.fusage = defaultFlagsUsage
+		out := conf.options.fout
+		conf.options.fusage = func(err error, usage func(io.Writer) error) error {
+			if err != nil {
+				fmt.Fprintln(out, err)
+			}
+			usage(out)
+			os.Exit(2)
+			return nil
+		}
 	}
 
 	return conf, nil
@@ -230,8 +238,8 @@ func (c *config) Load(args []string) (err error) {
 			if err == flag.ErrHelp {
 				err = nil
 			}
-			ferr := &FlagsUsageError{err, c.buildFlagsUsage()}
-			return c.options.fusage(ferr, c.options.fout)
+			usage := c.buildFlagsUsage()
+			return c.options.fusage(err, usage)
 		}
 
 		if err := c.updateFlags(); err != nil {
