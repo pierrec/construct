@@ -1,5 +1,5 @@
 // Package construct provides a simple way to load configuration into a struct
-// from multiple sources, by relying on its embedded types and interfaces.
+// from multiple sources and formats, by relying on its embedded types and interfaces.
 //
 // The goal is to reduce the code boilerplate used to initialize data structures to
 // a minimum, by leveraging Go's types syntax definitions, interface methods, types
@@ -68,8 +68,12 @@
 //  - uint, uint8, uint16, uint32, uint64
 //  - types implementing encoding.TextMarshaler and encoding.TextUnmarshaler
 //
-// TODO
+// Configuration formats
 //
-// Missing features:
-//  -
+// The FromIO interface is used to load and save the configuration from and to
+// any kind of storage and using any format.
+//
+// Implementations for file based storage and widely used formats such as json, toml,
+// yaml or ini are available in the construct/constructs package.
+//
 package construct
