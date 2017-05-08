@@ -98,6 +98,31 @@ func (f *StructField) Embedded() *StructStruct {
 // then its value is deserialized using encoding.Unmarshaler
 // or in a best effort way.
 func (f *StructField) Set(v interface{}) error {
+	switch v := v.(type) {
+	case map[string]interface{}:
+		if f.value.Kind() == reflect.Struct {
+			s := f.value.Addr()
+			err := setFromMap(s, v)
+			return fmt.Errorf("%v: %v", f, err)
+		}
+	case []map[string]interface{}:
+		if f.value.Kind() != reflect.Slice {
+			break
+		}
+		vType := f.value.Type()
+		if vType.Elem().Kind() != reflect.Struct {
+			break
+		}
+		sliceValues := reflect.MakeSlice(vType, len(v), len(v))
+		for i, item := range v {
+			v := sliceValues.Index(i).Addr()
+			if err := setFromMap(v.Interface(), item); err != nil {
+				return fmt.Errorf("%v: %v", f, err)
+			}
+		}
+		f.value.Set(sliceValues)
+		return nil
+	}
 	return Set(f.value, v, f.seps)
 }
 

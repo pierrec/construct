@@ -152,14 +152,6 @@ func (c *config) updateIO(store Store) error {
 			return fmt.Errorf("%s: %v", name, err)
 		}
 
-		if v != nil {
-			// Convert the value to make sure it can be Set properly.
-			v, err = structs.MarshalValue(v, field.Separators())
-			if err != nil {
-				return fmt.Errorf("%s: %v", name, err)
-			}
-		}
-
 		if err := field.Set(v); err != nil {
 			return err
 		}
