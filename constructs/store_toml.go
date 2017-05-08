@@ -48,6 +48,12 @@ func (store *tomlStore) Get(keys ...string) (interface{}, error) {
 	case int64, float64, string, bool, time.Time:
 	case *toml.TomlTree:
 		return w.ToMap(), nil
+	case []*toml.TomlTree:
+		l := make([]map[string]interface{}, len(w))
+		for i, t := range w {
+			l[i] = t.ToMap()
+		}
+		return l, nil
 	}
 	return v, nil
 }
