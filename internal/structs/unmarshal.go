@@ -88,7 +88,8 @@ func UnmarshalValue(value reflect.Value, s string, seps []rune) error {
 
 	switch value.Kind() {
 	default:
-		return fmt.Errorf("%v: %v", errCannotUnmarshal, value.Interface())
+		v := value.Interface()
+		return fmt.Errorf("%v: (%T)%v", errCannotUnmarshal, v, v)
 
 	case reflect.Bool:
 		v, err := strconv.ParseBool(s)
@@ -155,10 +156,11 @@ func UnmarshalValue(value reflect.Value, s string, seps []rune) error {
 		if err != nil {
 			return err
 		}
-		elem := value.Type().Elem()
+		vType := value.Type()
+		elem := vType.Elem()
 		sliceValues := value
 		if sliceValues.IsNil() {
-			sliceValues = reflect.MakeSlice(value.Type(), 0, len(values))
+			sliceValues = reflect.MakeSlice(vType, 0, len(values))
 		}
 		for _, s := range values {
 			v := reflect.New(elem).Elem()
@@ -183,7 +185,7 @@ func UnmarshalValue(value reflect.Value, s string, seps []rune) error {
 		elemType := vType.Elem()
 		mapValues := value
 		if mapValues.IsNil() {
-			mapValues = reflect.MakeMap(value.Type())
+			mapValues = reflect.MakeMap(vType)
 		}
 
 		if len(seps) > 0 {
