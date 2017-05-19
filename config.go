@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/pierrec/construct/internal/structs"
+	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
 )
 
@@ -200,14 +201,14 @@ func (c *config) buildKeys(fields []*structs.StructField, section string) error 
 		if emb := field.Embedded(); emb != nil {
 			section := c.toSection(section, emb)
 			if err := c.buildKeys(emb.Fields(), section); err != nil {
-				return fmt.Errorf("%s: %v", field.Name(), err)
+				return errors.Errorf("%s: %v", field.Name(), err)
 			}
 			continue
 		}
 		name := c.toName(section, field)
 		lname := strings.ToLower(name)
 		if _, ok := c.trans[lname]; ok {
-			return fmt.Errorf("duplicate config name: %s", lname)
+			return errors.Errorf("duplicate config name: %s", lname)
 		}
 		c.trans[lname] = name
 	}
@@ -290,7 +291,7 @@ func (c *config) Load(args []string) (err error) {
 			field := c.root.Lookup(names...)
 
 			if err := field.Set(v); err != nil {
-				return fmt.Errorf("env %s: %v", envvar, err)
+				return errors.Errorf("env %s: %v", envvar, err)
 			}
 			delete(c.trans, name)
 		}

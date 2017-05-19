@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kr/pretty"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -23,11 +24,11 @@ const (
 )
 
 var (
-	errNoStruct        = fmt.Errorf("not a struct")
-	errNoPointer       = fmt.Errorf("not a pointer")
-	errCannotUnmarshal = fmt.Errorf("cannot unmarshal value")
-	errInvalidMapKey   = fmt.Errorf("invalid map key")
-	errCannotSet       = fmt.Errorf("cannot set value")
+	errNoStruct        = errors.Errorf("not a struct")
+	errNoPointer       = errors.Errorf("not a pointer")
+	errCannotUnmarshal = errors.Errorf("cannot unmarshal value")
+	errInvalidMapKey   = errors.Errorf("invalid map key")
+	errCannotSet       = errors.Errorf("cannot set value")
 )
 
 // Supported types.
@@ -99,31 +100,51 @@ func (f *StructField) Embedded() *StructStruct {
 // or in a best effort way.
 func (f *StructField) Set(v interface{}) error {
 	switch v := v.(type) {
-	case map[string]interface{}:
-		if f.value.Kind() == reflect.Struct {
-			s := f.value.Addr()
-			err := setFromMap(s, v)
-			return fmt.Errorf("%v: %v", f, err)
-		}
-	case []map[string]interface{}:
+	case []interface{}:
 		if f.value.Kind() != reflect.Slice {
-			break
+			return errors.Errorf("%v: cannot assign a slice to a non slice field", f)
 		}
 		vType := f.value.Type()
-		if vType.Elem().Kind() != reflect.Struct {
-			break
-		}
 		sliceValues := reflect.MakeSlice(vType, len(v), len(v))
 		for i, item := range v {
-			v := sliceValues.Index(i).Addr()
-			if err := setFromMap(v.Interface(), item); err != nil {
-				return fmt.Errorf("%v: %v", f, err)
+			v := sliceValues.Index(i)
+			if !v.CanAddr() {
+				v = v.Addr()
+			}
+			if err := Set(v, item, nil); err != nil {
+				return errors.Errorf("%v: %v", f, err)
 			}
 		}
 		f.value.Set(sliceValues)
-		return nil
+	case map[string]interface{}:
+		if f.value.Kind() != reflect.Struct {
+			return errors.Errorf("%v: cannot assign a map to a non struct field", f)
+		}
+		s := f.value.Addr()
+		return setFromMap(s, v)
+	case []map[string]interface{}:
+		if f.value.Kind() != reflect.Slice {
+			return errors.Errorf("%v: cannot assign a slice map to a non slice field", f)
+		}
+		vType := f.value.Type()
+		if vType.Elem().Kind() != reflect.Struct {
+			return errors.Errorf("%v: cannot assign a slice map item to a non struct field", f)
+		}
+		sliceValues := reflect.MakeSlice(vType, len(v), len(v))
+		for i, item := range v {
+			v := sliceValues.Index(i)
+			if !v.CanAddr() {
+				v = v.Addr()
+			}
+			if err := setFromMap(v.Interface(), item); err != nil {
+				return errors.Errorf("%v: %v", f, err)
+			}
+		}
+		f.value.Set(sliceValues)
+	default:
+		return Set(f.value, v, f.seps)
 	}
-	return Set(f.value, v, f.seps)
+	return nil
 }
 
 // Interface returns the interface value of the field.
@@ -340,7 +361,7 @@ func fieldsOf(v interface{}, tagid, septagid string) (res []*StructField, err er
 			case "inline":
 				inline = true
 			default:
-				return nil, fmt.Errorf("unkown tag flag %s", flag)
+				return nil, errors.Errorf("unkown tag flag %s", flag)
 			}
 		}
 
@@ -363,7 +384,7 @@ func fieldsOf(v interface{}, tagid, septagid string) (res []*StructField, err er
 				v := value.Addr().Interface()
 				fields, err := fieldsOf(v, tagid, septagid)
 				if err != nil {
-					return nil, fmt.Errorf("%s: %v", fname, err)
+					return nil, errors.Errorf("%s: %v", fname, err)
 				}
 
 				fs = &StructStruct{fname, v, inline, value, fields}

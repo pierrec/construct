@@ -2,7 +2,6 @@ package structs
 
 import (
 	"encoding"
-	"fmt"
 	htemplate "html/template"
 	"net"
 	"net/url"
@@ -12,6 +11,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cast"
 )
 
@@ -89,7 +89,7 @@ func UnmarshalValue(value reflect.Value, s string, seps []rune) error {
 	switch value.Kind() {
 	default:
 		v := value.Interface()
-		return fmt.Errorf("%v: (%T)%v", errCannotUnmarshal, v, v)
+		return errors.Errorf("%v: (%T)%v", errCannotUnmarshal, v, v)
 
 	case reflect.Bool:
 		v, err := strconv.ParseBool(s)
@@ -143,7 +143,7 @@ func UnmarshalValue(value reflect.Value, s string, seps []rune) error {
 				v = v.Elem()
 			}
 			if err := UnmarshalValue(v, s, seps); err != nil {
-				return fmt.Errorf("%s: %v", s, err)
+				return errors.Errorf("%s: %v", s, err)
 			}
 		}
 
@@ -165,7 +165,7 @@ func UnmarshalValue(value reflect.Value, s string, seps []rune) error {
 		for _, s := range values {
 			v := reflect.New(elem).Elem()
 			if err := UnmarshalValue(v, s, seps); err != nil {
-				return fmt.Errorf("%s: %v", s, err)
+				return errors.Errorf("%s: %v", s, err)
 			}
 			sliceValues = reflect.Append(sliceValues, v)
 		}
@@ -198,18 +198,18 @@ func UnmarshalValue(value reflect.Value, s string, seps []rune) error {
 		for _, s := range values {
 			data, err := keyreader.read(s)
 			if err != nil {
-				return fmt.Errorf("%s: %v", s, err)
+				return errors.Errorf("%s: %v", s, err)
 			}
 			if len(data) != 2 {
-				return fmt.Errorf("%s: %v", s, errInvalidMapKey)
+				return errors.Errorf("%s: %v", s, errInvalidMapKey)
 			}
 			key := reflect.New(keyType).Elem()
 			if err := UnmarshalValue(key, data[0], seps); err != nil {
-				return fmt.Errorf("%s: %v", s, err)
+				return errors.Errorf("%s: %v", s, err)
 			}
 			v := reflect.New(elemType).Elem()
 			if err := UnmarshalValue(v, data[1], seps); err != nil {
-				return fmt.Errorf("%s: %v", s, err)
+				return errors.Errorf("%s: %v", s, err)
 			}
 			mapValues.SetMapIndex(key, v)
 		}

@@ -1,10 +1,10 @@
 package construct
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/pierrec/construct/internal/structs"
+	"github.com/pkg/errors"
 )
 
 // LookupFn is the function signature used to return the runes used
@@ -119,7 +119,7 @@ func ioEncode(conf Config, store Store, keys []string, root *structs.StructStruc
 
 		v := field.Interface()
 		if err := store.Set(v, ks...); err != nil {
-			return fmt.Errorf("value %v: %v", v, err)
+			return errors.Errorf("value %v: %v", v, err)
 		}
 
 		if err := ioComment(conf, store, ks...); err != nil {
@@ -149,7 +149,7 @@ func (c *config) updateIO(store Store) error {
 		}
 		v, err := store.Get(keys...)
 		if err != nil {
-			return fmt.Errorf("%s: %v", name, err)
+			return errors.Errorf("%s: %v", name, err)
 		}
 
 		if err := field.Set(v); err != nil {

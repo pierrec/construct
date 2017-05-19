@@ -11,6 +11,8 @@ import (
 	"sort"
 	"text/template"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 // MarshalValue converts v into a higher level value or a string as follows:
@@ -147,7 +149,7 @@ func MarshalValue(v interface{}, seps []rune) (interface{}, error) {
 		sort.Sort(sort.StringSlice(lst))
 
 	default:
-		return nil, fmt.Errorf("marshal: unsupported type %T", v)
+		return nil, errors.Errorf("marshal: unsupported type %T", v)
 	}
 
 	return csv.write(lst...)

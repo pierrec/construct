@@ -1,8 +1,9 @@
 package structs
 
 import (
-	"fmt"
 	"reflect"
+
+	"github.com/pkg/errors"
 )
 
 // Set assigns v to the value.
@@ -40,7 +41,7 @@ func Set(value reflect.Value, v interface{}, seps []rune) error {
 func convert(a, b reflect.Value) (_ reflect.Value, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("%v", r)
+			err = errors.Errorf("%v", r)
 		}
 	}()
 	return a.Convert(b.Type()), nil
@@ -61,7 +62,7 @@ func setFromMap(value interface{}, values map[string]interface{}) error {
 			continue
 		}
 		if err := field.Set(v); err != nil {
-			return fmt.Errorf("%v: %v", name, err)
+			return errors.Errorf("%v: %v", name, err)
 		}
 	}
 	return nil

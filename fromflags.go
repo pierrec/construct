@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pierrec/construct/internal/structs"
+	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
 )
 
@@ -49,7 +50,7 @@ func (c *config) buildFlags(section string, root *structs.StructStruct) error {
 		// Convert lower types.
 		v, err := field.MarshalValue()
 		if err != nil {
-			return fmt.Errorf("field %s: %v", name, err)
+			return errors.Errorf("field %s: %v", name, err)
 		}
 		lname := strings.ToLower(name)
 		usage := config.Usage(field.Name())
@@ -183,7 +184,7 @@ func (c *config) updateFlags() (err error) {
 		v := reflect.ValueOf(refv).Elem().Interface()
 		err = field.Set(v)
 		if err != nil {
-			err = fmt.Errorf("flag %s: %v", f.Name, err)
+			err = errors.Errorf("flag %s: %v", f.Name, err)
 		}
 		delete(c.trans, f.Name)
 	})
