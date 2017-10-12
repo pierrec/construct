@@ -1,17 +1,23 @@
 // Package construct provides a simple way to load configuration into a struct
-// from multiple sources and formats, by relying on its embedded types and interfaces.
+// from multiple sources and formats, by relying on the struct embedded types
+// and special interfaces.
 //
 // The goal is to reduce the code boilerplate used to initialize data structures to
 // a minimum, by leveraging Go's types syntax definitions, interface methods, types
-// reusability and by providing full support for complex field types (basic Go types, slices,
-// maps and any combination of those).
+// reusability and by providing full support for complex field types (basic Go types,
+// slices, maps and any combination of those.)
+//
+// For instance, when loading the data from the command line, instead of defining
+// the cli options definitions using struct field tags, as it is usually done for
+// cli parsing packages, the definitions are retrieved from the Config.Usage()
+// method. This allows building definitions dynamically.
 //
 // Overview
 //
 // A struct has its fields populated by calling the Load() function.
 // The rules to populate the struct fields are as follow:
 //  - fields are only processed if they are exported
-//  - a field represents a config item for the Config
+//  - a field represents a config item for the Config interface
 //  - an embedded type implementing the Config interface is used to group config items logically
 //  - an embedded type implementing the Config and FromFlags interfaces represents a subcommand
 //  - fields processing can be modified using field tags with the following format

@@ -22,18 +22,18 @@ const (
 	//  - a map has 2 runes: one to identify the map items, the other to identify the key within an item
 	//  - a slice has 1 rune to identify the slice items
 	//
-	// e.g. for a field is defined as
+	// e.g. for a field defined as
 	//      Field map[int][]string `...sep=" :,"...`
 	//
-	//  map items are separated by a space, its key by a : and the slice items by a ,
+	//  map items are separated by a space, its key by a ':' and the slice items by a ','
 	//  so that `key1:a,b key2:x,y` is deserialized as [key1:["a","b"] key2:["x","y"]].
 	TagSepID = "sep"
 )
 
 // Config defines the main interface for a config struct.
 // Any embedded struct is processed specifically depending on the interfaces it implements:
-//  - Config: it defines a group of config items with a prefix set to the type name
-//  - Config and FromFlags: it defines a subcommand, which is automatically loaded from flags.
+//  - Config interface: it defines a group of config items with a prefix set to the embedded type name
+//  - Config and FromFlags interfaces: it defines a subcommand, which is automatically loaded from flags.
 //    Subcommands are not case sensitive.
 //
 // The embedded type names and field names can be overriden by a struct tag specifying the name to be used.

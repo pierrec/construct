@@ -33,7 +33,7 @@ var _ construct.Store = (*tomlStore)(nil)
 // tomlStore wraps an toml.Toml instance to implement the construct.ConfigIO interface.
 type tomlStore struct {
 	lookup construct.LookupFn
-	toml   *toml.TomlTree
+	toml   *toml.Tree
 }
 
 func (store *tomlStore) StructTag() string { return "toml" }
@@ -46,9 +46,9 @@ func (store *tomlStore) Get(keys ...string) (interface{}, error) {
 	v := store.toml.GetPath(keys)
 	switch w := v.(type) {
 	case int64, float64, string, bool, time.Time:
-	case *toml.TomlTree:
+	case *toml.Tree:
 		return w.ToMap(), nil
-	case []*toml.TomlTree:
+	case []*toml.Tree:
 		l := make([]map[string]interface{}, len(w))
 		for i, t := range w {
 			l[i] = t.ToMap()
